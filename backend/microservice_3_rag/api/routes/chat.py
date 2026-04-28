@@ -1,0 +1,52 @@
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from pydantic import BaseModel
+from database.connection import get_db
+from api.deps import get_tenant_from_api_key
+from services.embedding_service import embedding_service
+from services.pgvector_service import search_similar_products
+from services.llm_service import generate_rag_response
+
+router = APIRouter()
+
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+
+@router.get("/config")
+def get_chat_config(tenant: dict = Depends(get_tenant_from_api_key)):
+    """El frontend llama a este endpoint al abrir el chat para saber cómo saludar"""
+    return {"welcome_message": tenant["welcome_message"]}
+
+@router.post("/")
+def chat_interaction(request: ChatRequest, db: Session = Depends(get_db), tenant: dict = Depends(get_tenant_from_api_key)):
+    
+    vector = embedding_service.generate_vector(request.message)
+    context_products = search_similar_products(db, tenant["user_id"], vector, limit=4)
+    
+    sql_hist = text("SELECT role, message FROM chat_history WHERE session_id = :sid ORDER BY created_at ASC LIMIT 6")
+    history = db.execute(sql_hist, {"sid": request.session_id}).fetchall()
+    
+    bot_response = generate_rag_response(
+        system_prompt=tenant["system_prompt"],
+        llm_model=tenant["llm_model"],
+        context_products=context_products,
+        chat_history=history,
+        user_message=request.message
+    )
+    
+    sql_insert = text("""
+        INSERT INTO chat_history (session_id, user_id, role, message) 
+        VALUES (:sid, :uid, 'user', :umsg), (:sid, :uid, 'assistant', :bmsg)
+    """)
+    db.execute(sql_insert, {
+        "sid": request.session_id, "uid": tenant["user_id"], 
+        "umsg": request.message, "bmsg": bot_response
+    })
+    db.commit()
+    
+    return {
+        "reply": bot_response,
+        "products_referenced": context_products
+    }
