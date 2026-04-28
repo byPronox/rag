@@ -6,7 +6,8 @@ from api.routes import auth_routes, api_keys
 
 app = FastAPI(title="SaaS RAG - Core API", version="1.0.0")
 
-origins = [url.strip() for url in settings.FRONTEND_URLS.split(",") if url.strip()]
+urls_crudas = settings.FRONTEND_URLS if settings.FRONTEND_URLS
+origins = [url.strip() for url in urls_crudas.split(",") if url.strip()]
 
 app.add_middleware(
     CORSMiddleware,
