@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_rag" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.rag</field>
+        <field name="model">res.config.settings</field>
+        <field name="priority" eval="20"/>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="RAG AI Sync" string="RAG AI Sync" name="rag_rabbitmq_sync">
+                        <setting string="Enable Synchronization">
+                            <field name="rag_sync_active" widget="boolean_toggle"/>
+                        </setting>
+                    <block title="RAG Config Connection" name="rag_rabbitmq_connection">
+                        <setting string="URL" help="Provided by RAG sistem (e.g., amqps://user:pass@railway.app:5672)">
+                            <field name="rag_rabbitmq_url"/>
+                        </setting>
+                        <setting string="Queue Name" help="The name of the RabbitMQ queue">
+                            <field name="rag_rabbitmq_queue"/>
+                        </setting>
+                        <setting string="System API Key" help="Unique API Key generated in your RAG sistem account">
+                            <field name="rag_api_key" password="True"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_rag_config_settings" model="ir.actions.act_window">
+        <field name="name">RAG AI Settings</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="target">inline</field>
+        <field name="context">{'module' : 'rag_rabbitmq_sync'}</field>
+    </record>
+
+    <menuitem id="menu_rag_config" 
+              name="RAG AI Sync" 
+              parent="base.menu_custom" 
+              action="action_rag_config_settings" 
+              sequence="100"/>
+</odoo>
