@@ -6,4 +6,4 @@ pgvector==0.2.5
 numpy<2.0.0
 sentence-transformers==2.5.1
 torch==2.2.1
-groq==0.4.2
+groq>=0.8.0
