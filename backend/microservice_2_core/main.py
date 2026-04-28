@@ -3,15 +3,24 @@ from fastapi.middleware.cors import CORSMiddleware
 from database.connection import init_db
 from config.settings import settings
 from api.routes import auth_routes, api_keys
+import logging
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="SaaS RAG - Core API", version="1.0.0")
 
-urls_crudas = settings.FRONTEND_URLS if settings.FRONTEND_URLS
-origins = [url.strip() for url in urls_crudas.split(",") if url.strip()]
+urls_crudas = settings.FRONTEND_URLS
+
+origins = []
+if urls_crudas:
+    origins = [url.strip() for url in urls_crudas.split(",") if url.strip()]
+else:
+    logger.warning("⚠️ ALERTA DE SEGURIDAD: FRONTEND_URLS no está configurado.")
+
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=origins if origins else [""],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,4 +36,4 @@ def on_startup():
 
 @app.get("/")
 def read_root():
-    return {"message": "Microservicio Core API funcionando y estructurado modularmente."}
+    return {"message": "Microservicio Core API funcionando de forma segura."}
