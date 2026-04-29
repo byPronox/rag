@@ -2,6 +2,13 @@
 const nextConfig = {
   images: {
     unoptimized: process.env.NODE_ENV === 'development',
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        pathname: '/**',
+      },
+    ],
   },
   experimental: {
     serverActions: {
