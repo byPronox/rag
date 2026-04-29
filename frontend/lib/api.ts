@@ -1,17 +1,21 @@
-// API Configuration for RAG Intelligence Backend (Railway)
+// API Configuration for Core & RAG Microservices
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+// 1. Apunta al Microservicio 2 (Core)
+const CORE_API_URL = process.env.NEXT_PUBLIC_CORE_API_URL || "http://localhost:8000"
 
-// Auth endpoints
+// 2. Apunta al Microservicio 3 (RAG / Chatbot)
+const RAG_API_URL = process.env.NEXT_PUBLIC_RAG_API_URL || "http://localhost:8001"
+
+// Auth endpoints -> Usan el Core API (Microservicio 2)
 export const AUTH_ENDPOINTS = {
-  register: `${API_BASE_URL}/auth/register`,
-  login: `${API_BASE_URL}/auth/login`,
+  register: `${CORE_API_URL}/api/v1/auth/register`,
+  login: `${CORE_API_URL}/api/v1/auth/login`,
 }
 
-// RAG endpoints
+// RAG endpoints -> Usan el RAG API (Microservicio 3)
 export const RAG_ENDPOINTS = {
-  search: `${API_BASE_URL}/api/v1/search/`,
-  chat: `${API_BASE_URL}/api/v1/chat/`,
+  search: `${RAG_API_URL}/api/v1/search/`,
+  chat: `${RAG_API_URL}/api/v1/chat/`,
 }
 
 // API helper functions
@@ -61,9 +65,11 @@ export async function login(email: string, password: string): Promise<LoginRespo
   formData.append("username", email)
   formData.append("password", password)
   
+  // Automáticamente usará CORE_API_URL
   return apiPostFormData<LoginResponse>(AUTH_ENDPOINTS.login, formData)
 }
 
 export async function register(email: string, password: string): Promise<RegisterResponse> {
+  // Automáticamente usará CORE_API_URL
   return apiPost<RegisterResponse>(AUTH_ENDPOINTS.register, { email, password })
 }
