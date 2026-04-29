@@ -42,10 +42,15 @@ def process_product_message(ch, method, properties, body):
             print(f"Processing '{action}' for product {variant_id} (Tenant ID: {user_id})...")
 
             if action in ['create', 'update', 'sync']:
-                text_to_embed = f"Company: {data.get('company_name', '')}. Product: {data['display_name']}. Category: {data.get('category', '')}. " \
-                                f"Price: {data['price_included']} {data.get('currency', 'USD')} (Final price including {data.get('tax_percent', 0)}% tax). " \
-                                f"Base price without tax is {data['price_excluded']} {data.get('currency', 'USD')}. " \
-                                f"Description: {data.get('description', '')}"
+                text_to_embed = (
+                    f"Company: {data.get('company_name', '')}. "
+                    f"Product: {data['display_name']}. Category: {data.get('category', '')}. "
+                    f"Price: {data['price_included']} {data.get('currency', 'USD')} (Final price including {data.get('tax_percent', 0)}% tax). "
+                    f"Base price without tax is {data['price_excluded']} {data.get('currency', 'USD')}. "
+                    f"Description: {data.get('description', '')}. "
+                    f"Accessories for this product: {data.get('accessories', 'None')}. "
+                    f"Alternative products: {data.get('alternatives', 'None')}."
+                )
                 
                 vector = embedding_service.generate_vector(text_to_embed)
                 
@@ -54,9 +59,9 @@ def process_product_message(ch, method, properties, body):
                         variant_id, user_id, sku, display_name, description, 
                         price_excluded, price_included, tax_percent, currency, 
                         stock, category, website_url, image_128_url, image_512_url, image_1920_url, 
-                        company_id, company_name, embedding
+                        company_id, company_name, accessories, alternatives, embedding
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (variant_id, user_id) DO UPDATE SET
                         sku = EXCLUDED.sku,
                         display_name = EXCLUDED.display_name,
@@ -73,13 +78,16 @@ def process_product_message(ch, method, properties, body):
                         image_1920_url = EXCLUDED.image_1920_url,
                         company_id = EXCLUDED.company_id,
                         company_name = EXCLUDED.company_name,
+                        accessories = EXCLUDED.accessories,
+                        alternatives = EXCLUDED.alternatives,
                         embedding = EXCLUDED.embedding;
                 """, (
                     variant_id, user_id, data['sku'], data['display_name'], data['description'], 
                     data['price_excluded'], data['price_included'], data['tax_percent'], data['currency'],
                     data['stock'], data.get('category'), data.get('website_url'), 
                     data.get('image_128_url'), data.get('image_512_url'), data.get('image_1920_url'), 
-                    data.get('company_id'), data.get('company_name'), vector
+                    data.get('company_id'), data.get('company_name'), 
+                    data.get('accessories', ''), data.get('alternatives', ''), vector
                 ))
             
             elif action == 'delete':

@@ -43,6 +43,8 @@ class ProductEmbedding(Base):
     currency = Column(String(10))
     stock = Column(Numeric)
     category = Column(String(100))
+    accessories = Column(Text)
+    alternatives = Column(Text)
     website_url = Column(Text)
     image_128_url = Column(Text)
     image_512_url = Column(Text)
