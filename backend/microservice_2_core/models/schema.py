@@ -41,6 +41,11 @@ class ProductEmbedding(Base):
     stock = Column(Numeric)
     category = Column(String(100))
     website_url = Column(Text)
+    image_128_url = Column(Text)
+    image_512_url = Column(Text)
+    image_1920_url = Column(Text)
+    company_id = Column(Integer)
+    company_name = Column(String(255))
     embedding = Column(Vector(384))
 
 class SearchHistory(Base):

@@ -21,16 +21,20 @@ class ResConfigSettings(models.TransientModel):
         help="The unique API Key provided by the RAG Admin Panel."
     )
 
+    # NUEVO CAMPO: Public Base URL
+    rag_public_base_url = fields.Char(
+        string='Public Base URL (Ngrok/Prod)',
+        config_parameter='rag_rabbitmq_sync.public_base_url',
+        help="External URL to serve images (e.g., https://egomaniac-earshot-wound.ngrok-free.dev)"
+    )
+
     rag_sync_active = fields.Boolean(
         string='Enable Automatic Sync',
-        config_parameter='rag_rabbitmq_sync.sync_active',
-        # Do not use default=True here. 
-        # Config parameters handle defaults differently.
+        config_parameter='rag_rabbitmq_sync.sync_active'
     )
 
     def set_values(self):
         super(ResConfigSettings, self).set_values()
-        # Save the boolean as a string 'True' or 'False'
         self.env['ir.config_parameter'].sudo().set_param(
             'rag_rabbitmq_sync.sync_active', 
             str(self.rag_sync_active)
@@ -38,7 +42,6 @@ class ResConfigSettings(models.TransientModel):
 
     def get_values(self):
         res = super(ResConfigSettings, self).get_values()
-        # Read the string parameter and convert it back to a boolean for the UI
         sync_active_str = self.env['ir.config_parameter'].sudo().get_param('rag_rabbitmq_sync.sync_active', 'True')
         res.update(
             rag_sync_active=sync_active_str.lower() == 'true'

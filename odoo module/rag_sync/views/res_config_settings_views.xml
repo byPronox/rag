@@ -12,32 +12,21 @@
                             <field name="rag_sync_active" widget="boolean_toggle"/>
                         </setting>
                     <block title="RAG Config Connection" name="rag_rabbitmq_connection">
-                        <setting string="URL" help="Provided by RAG sistem (e.g., amqps://user:pass@railway.app:5672)">
+                        <setting string="URL" help="Provided by RAG system (e.g., amqps://user:pass@railway.app:5672)">
                             <field name="rag_rabbitmq_url"/>
                         </setting>
                         <setting string="Queue Name" help="The name of the RabbitMQ queue">
                             <field name="rag_rabbitmq_queue"/>
                         </setting>
-                        <setting string="System API Key" help="Unique API Key generated in your RAG sistem account">
+                        <setting string="System API Key" help="Unique API Key generated in your RAG system account">
                             <field name="rag_api_key" password="True"/>
+                        </setting>
+                        <setting string="Public Base URL" help="Your Ngrok or Production URL for serving images">
+                            <field name="rag_public_base_url"/>
                         </setting>
                     </block>
                 </app>
             </xpath>
         </field>
     </record>
-
-    <record id="action_rag_config_settings" model="ir.actions.act_window">
-        <field name="name">RAG AI Settings</field>
-        <field name="res_model">res.config.settings</field>
-        <field name="view_mode">form</field>
-        <field name="target">inline</field>
-        <field name="context">{'module' : 'rag_rabbitmq_sync'}</field>
-    </record>
-
-    <menuitem id="menu_rag_config" 
-              name="RAG AI Sync" 
-              parent="base.menu_custom" 
-              action="action_rag_config_settings" 
-              sequence="100"/>
 </odoo>
