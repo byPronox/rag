@@ -42,22 +42,29 @@ def process_product_message(ch, method, properties, body):
             print(f"Processing '{action}' for product {variant_id} (Tenant ID: {user_id})...")
 
             if action in ['create', 'update', 'sync']:
-                # Añadimos la compañía al texto de la IA para que pueda buscar por empresa
-                text_to_embed = f"Company: {data.get('company_name', '')}. Product: {data['display_name']}. Category: {data.get('category', '')}. Description: {data.get('description', '')}"
+                text_to_embed = f"Company: {data.get('company_name', '')}. Product: {data['display_name']}. Category: {data.get('category', '')}. " \
+                                f"Price: {data['price_included']} {data.get('currency', 'USD')} (Final price including {data.get('tax_percent', 0)}% tax). " \
+                                f"Base price without tax is {data['price_excluded']} {data.get('currency', 'USD')}. " \
+                                f"Description: {data.get('description', '')}"
+                
                 vector = embedding_service.generate_vector(text_to_embed)
                 
                 cur.execute("""
                     INSERT INTO product_embeddings (
-                        variant_id, user_id, sku, display_name, description, price, 
+                        variant_id, user_id, sku, display_name, description, 
+                        price_excluded, price_included, tax_percent, currency, 
                         stock, category, website_url, image_128_url, image_512_url, image_1920_url, 
                         company_id, company_name, embedding
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (variant_id, user_id) DO UPDATE SET
                         sku = EXCLUDED.sku,
                         display_name = EXCLUDED.display_name,
                         description = EXCLUDED.description,
-                        price = EXCLUDED.price,
+                        price_excluded = EXCLUDED.price_excluded,
+                        price_included = EXCLUDED.price_included,
+                        tax_percent = EXCLUDED.tax_percent,
+                        currency = EXCLUDED.currency,
                         stock = EXCLUDED.stock,
                         category = EXCLUDED.category,
                         website_url = EXCLUDED.website_url,
@@ -69,7 +76,8 @@ def process_product_message(ch, method, properties, body):
                         embedding = EXCLUDED.embedding;
                 """, (
                     variant_id, user_id, data['sku'], data['display_name'], data['description'], 
-                    data['price'], data['stock'], data.get('category'), data.get('website_url'), 
+                    data['price_excluded'], data['price_included'], data['tax_percent'], data['currency'],
+                    data['stock'], data.get('category'), data.get('website_url'), 
                     data.get('image_128_url'), data.get('image_512_url'), data.get('image_1920_url'), 
                     data.get('company_id'), data.get('company_name'), vector
                 ))
