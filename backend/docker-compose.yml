@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  # =========================================
+  # 1. BASE DE DATOS (PostgreSQL + pgvector)
+  # =========================================
+  postgres-vector:
+    image: pgvector/pgvector:pg16
+    container_name: local_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./database/scriptpgdb.sql:/docker-entrypoint-initdb.d/scriptpgdb.sql
+      - pgdata_local:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # =========================================
+  # 2. MESSAGE BROKER (RabbitMQ)
+  # =========================================
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: local_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS}
+      RABBITMQ_NODENAME: rabbit@rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data_local:/var/lib/rabbitmq
+    restart: unless-stopped
+
+  # =========================================
+  # 3. MICROSERVICIO 1: SYNC
+  # =========================================
+  microservice_sync:
+    build: 
+      context: ./microservice_1_sync
+    container_name: ms_sync
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+    depends_on:
+      - postgres-vector
+      - rabbitmq
+    restart: unless-stopped
+
+  # =========================================
+  # 4. MICROSERVICIO 2: CORE
+  # =========================================
+  microservice_core:
+    build: 
+      context: ./microservice_2_core
+    container_name: ms_core
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+    depends_on:
+      - postgres-vector
+      - rabbitmq
+    restart: unless-stopped
+
+  # =========================================
+  # 5. MICROSERVICIO 3: RAG
+  # =========================================
+  microservice_rag:
+    build: 
+      context: ./microservice_3_rag
+    container_name: ms_rag
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - RABBITMQ_URL=${RABBITMQ_URL}
+    depends_on:
+      - postgres-vector
+      - rabbitmq
+    restart: unless-stopped
+
+volumes:
+  pgdata_local:
+  rabbitmq_data_local:

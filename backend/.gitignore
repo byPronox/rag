@@ -1,0 +1,28 @@
+# ==========================================
+# FILES IGNORED BY GIT
+# ==========================================
+
+# Local environment variables files (CRITICAL!)
+.env
+
+# Python virtual environments
+venv/
+env/
+.venv/
+
+# Python compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local data folders (If you ever mount physical folders in Docker)
+pgdata/
+rabbitmq_data/
+*.sql.bak
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

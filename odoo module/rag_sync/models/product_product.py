@@ -11,6 +11,9 @@ class ProductProduct(models.Model):
         
         base_url = Config.get_param('rag_rabbitmq_sync.public_base_url') or Config.get_param('web.base.url')
         base_url = base_url.rstrip('/')
+
+        accessories = self.accessory_product_ids.mapped('display_name')
+        alternatives = self.alternative_product_ids.mapped('display_name')
         
         if self.image_variant_1920:
             img_128 = f"{base_url}/web/image/product.product/{self.id}/image_variant_128"
@@ -50,6 +53,8 @@ class ProductProduct(models.Model):
             'sku': self.default_code,
             'display_name': self.display_name,
             'description': clean_description,
+            'accessories': ", ".join(accessories) if accessories else "",
+            'alternatives': ", ".join(alternatives) if alternatives else "",
             'category': category_name,
             'website_url': self.website_url,
             'stock': self.qty_available,
