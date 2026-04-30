@@ -24,8 +24,14 @@ export default function LoginPage() {
 
     try {
       const response = await apiLogin(email, password)
-      login(response.access_token)
-      router.push("/")
+      login(response.access_token, response.user)
+      
+      // Redirect based on user role
+      if (response.user.role === "admin") {
+        router.push("/admin")
+      } else {
+        router.push("/dashboard")
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al iniciar sesión")
     } finally {
