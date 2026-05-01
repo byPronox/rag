@@ -33,6 +33,7 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), 
         httponly=True,   
         samesite="none",
         secure=True,
+        path="/",
         max_age=86400 * 7
     )
     
@@ -56,6 +57,7 @@ def logout(response: Response):
         key="access_token",
         httponly=True,
         samesite="none",  
+        path="/",
         secure=True       
     )
     return {"message": "Sesión cerrada"}
