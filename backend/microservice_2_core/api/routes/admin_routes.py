@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from database.connection import get_db
 from models.schema import GlobalSetting 
 from security.jwt_handler import get_current_admin
+from schemas.pydantic_models import GlobalSettingsUpdate, UserCreate
 
 router = APIRouter()
 
