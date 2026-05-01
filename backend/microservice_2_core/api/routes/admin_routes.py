@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from database.connection import get_db
 from models.schema import User, UserConfig, GlobalSetting, AIModel
-from security.jwt_handler import get_current_admin, get_password_hash
+from security.jwt_handler import get_password_hash
 from api.deps import get_current_admin, get_current_user
 from schemas.pydantic_models import GlobalSettingsUpdate, UserCreate, ApiKeyResponse, AIModelResponse, AIModelUpdate
 import secrets, requests
