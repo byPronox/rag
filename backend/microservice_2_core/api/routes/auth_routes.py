@@ -11,9 +11,19 @@ router = APIRouter()
 @router.post("/login")
 def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == form_data.username).first()
+    
+    # 1. Verificamos que el usuario exista y la contraseña sea correcta
     if not user or not verify_password(form_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
     
+    # 2. NUEVO: Verificamos si la cuenta fue desactivada (Borrado Lógico)
+    if not user.is_active:
+        raise HTTPException(
+            status_code=403, 
+            detail="Esta cuenta ha sido desactivada. Por favor contacte al administrador."
+        )
+    
+    # 3. Si todo está bien, generamos el token
     access_token = create_access_token(data={"sub": user.email})
     
     response.set_cookie(

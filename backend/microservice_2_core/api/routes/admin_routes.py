@@ -100,18 +100,21 @@ def create_user_by_admin(user_data: UserCreate, admin: User = Depends(get_curren
 @router.delete("/users/{user_id}")
 def delete_user(user_id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
     if admin.id == user_id:
-         raise HTTPException(status_code=400, detail="No puedes eliminarte a ti mismo.")
+         raise HTTPException(status_code=400, detail="No puedes desactivar tu propia cuenta de administrador.")
          
     user = db.query(User).filter(User.id == user_id).first()
+    config = db.query(UserConfig).filter(UserConfig.user_id == user_id).first()
+
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
-        
-    db.query(UserConfig).filter(UserConfig.user_id == user_id).delete(synchronize_session=False)
 
-    db.delete(user)
+    user.is_active = False
+    if config:
+        config.is_active = False
+
     db.commit()
     
-    return {"message": "Usuario y todos sus datos eliminados correctamente"}
+    return {"message": f"El usuario {user.email} ha sido desactivado y ya no tiene acceso al sistema."}
 
 @router.post("/users/{user_id}/api-key", response_model=ApiKeyResponse)
 def regenerate_user_api_key(user_id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
