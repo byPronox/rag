@@ -3,9 +3,14 @@ from config.settings import settings
 
 client = Groq(api_key=settings.GROQ_API_KEY) if settings.GROQ_API_KEY else None
 
-def generate_rag_response(system_prompt: str, llm_model: str, context_products: list, chat_history: list, user_message: str):
-    if not client:
-        return "ERROR: Groq API Key is missing in backend configuration."
+def generate_rag_response(system_prompt: str, llm_model: str, context_products: list, chat_history: list, user_message: str, groq_api_key: str):
+    
+    # Validamos que el admin haya guardado la llave
+    if not groq_api_key:
+        return "ERROR: El administrador del sistema no ha configurado la Master API Key de Groq."
+
+    # Iniciamos el cliente con la llave de la base de datos
+    client = Groq(api_key=groq_api_key)
 
     context_text = "AVAILABLE CATALOG:\n"
     if not context_products:
@@ -21,7 +26,6 @@ def generate_rag_response(system_prompt: str, llm_model: str, context_products: 
     for role, msg in chat_history:
         messages.append({"role": role, "content": msg})
         
-    # 4. Mensaje actual
     messages.append({"role": "user", "content": user_message})
 
     try:

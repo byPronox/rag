@@ -33,7 +33,8 @@ def chat_interaction(request: ChatRequest, db: Session = Depends(get_db), tenant
         llm_model=tenant["llm_model"],
         context_products=context_products,
         chat_history=history,
-        user_message=request.message
+        user_message=request.message,
+        groq_api_key=tenant["groq_api_key"]
     )
     
     sql_insert = text("""

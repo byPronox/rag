@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from database.connection import get_db
 from models.schema import User, UserConfig, GlobalSetting
-from security.jwt_handler import get_current_admin
+from security.jwt_handler import get_current_admin, get_password_hash
 from schemas.pydantic_models import GlobalSettingsUpdate, UserCreate
 
 router = APIRouter()
