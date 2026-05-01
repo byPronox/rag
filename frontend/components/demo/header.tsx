@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Bell, User, Search, BellOff } from "lucide-react"
+import { Bell, Search, BellOff } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import {
@@ -9,6 +9,7 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { UserMenu } from "@/components/user-menu"
 
 export function DemoHeader() {
   return (
@@ -61,16 +62,9 @@ export function DemoHeader() {
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* User Button - Link to Login */}
-        <Link href="/login">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="hover:text-primary/80 transition-colors duration-200 rounded-full hover:bg-[var(--surface-container)]"
-          >
-            <User className="w-5 h-5" />
-          </Button>
-        </Link>
+        {/* AQUÍ REEMPLAZAMOS EL BOTÓN ESTÁTICO POR TU COMPONENTE DINÁMICO */}
+        <UserMenu />
+        
       </div>
     </header>
   )
