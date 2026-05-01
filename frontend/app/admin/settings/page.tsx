@@ -16,35 +16,50 @@ import {
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Settings, Key, Save, RefreshCw } from "lucide-react"
-import { getAdminSettings, updateAdminSettings } from "@/lib/api" // Asegúrate de importar esto
+import { getAdminSettings, updateAdminSettings, getModels, AIModel } from "@/lib/api" // <-- Añadido getModels y AIModel
 
 export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [message, setMessage] = useState({ type: "", text: "" })
 
+  // Nuevos estados para guardar los modelos activos
+  const [activeLlmModels, setActiveLlmModels] = useState<AIModel[]>([])
+  const [activeEmbeddingModels, setActiveEmbeddingModels] = useState<AIModel[]>([])
+
   const [config, setConfig] = useState({
-    default_llm_model: "llama3-8b-8192",
-    default_embedding_model: "all-MiniLM-L6-v2",
+    default_llm_model: "",
+    default_embedding_model: "",
     default_welcome_message: "",
     default_system_prompt: "",
     groq_api_key: "",
     maintenance_mode: false,
   })
 
-  // Cargar la configuración desde la base de datos al abrir la página
+  // Cargar la configuración y los modelos desde la base de datos al abrir la página
   useEffect(() => {
-    const fetchSettings = async () => {
+    const fetchData = async () => {
       try {
-        const data = await getAdminSettings()
-        if (data) {
+        // Ejecutamos ambas peticiones al mismo tiempo para que sea más rápido (Promise.all)
+        const [settingsData, modelsData] = await Promise.all([
+          getAdminSettings(),
+          getModels()
+        ])
+
+        if (modelsData) {
+          // Filtramos solo los que están activos y los separamos por tipo
+          setActiveLlmModels(modelsData.filter(m => m.is_active && m.type === "llm"))
+          setActiveEmbeddingModels(modelsData.filter(m => m.is_active && m.type === "embedding"))
+        }
+
+        if (settingsData) {
           setConfig({
-            default_llm_model: data.default_llm_model || "llama3-8b-8192",
-            default_embedding_model: data.default_embedding_model || "all-MiniLM-L6-v2",
-            default_welcome_message: data.default_welcome_message || "",
-            default_system_prompt: data.default_system_prompt || "",
-            groq_api_key: data.groq_api_key || "",
-            maintenance_mode: data.maintenance_mode || false,
+            default_llm_model: settingsData.default_llm_model || "",
+            default_embedding_model: settingsData.default_embedding_model || "",
+            default_welcome_message: settingsData.default_welcome_message || "",
+            default_system_prompt: settingsData.default_system_prompt || "",
+            groq_api_key: settingsData.groq_api_key || "",
+            maintenance_mode: settingsData.maintenance_mode || false,
           })
         }
       } catch (error) {
@@ -53,7 +68,7 @@ export default function SettingsPage() {
         setIsLoading(false)
       }
     }
-    fetchSettings()
+    fetchData()
   }, [])
 
   // Guardar la configuración en la base de datos
@@ -138,10 +153,17 @@ export default function SettingsPage() {
                     <SelectValue placeholder="Select Model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="llama3-8b-8192">Llama 3 8B (Groq Fast)</SelectItem>
-                    <SelectItem value="llama3-70b-8192">Llama 3 70B (Groq Advanced)</SelectItem>
-                    <SelectItem value="mixtral-8x7b-32768">Mixtral 8x7B (Groq)</SelectItem>
-                    <SelectItem value="gemma-7b-it">Gemma 7B IT (Groq)</SelectItem>
+                    {activeLlmModels.length > 0 ? (
+                      activeLlmModels.map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          {model.name} ({model.provider})
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="none" disabled>
+                        No active LLM models found
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -156,8 +178,17 @@ export default function SettingsPage() {
                     <SelectValue placeholder="Select Model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all-MiniLM-L6-v2">all-MiniLM-L6-v2 (Standard)</SelectItem>
-                    {/* Add more embedding models here if your Python backend supports them */}
+                    {activeEmbeddingModels.length > 0 ? (
+                      activeEmbeddingModels.map((model) => (
+                        <SelectItem key={model.id} value={model.id}>
+                          {model.name} ({model.provider})
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="none" disabled>
+                        No active Embedding models found
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
