@@ -67,4 +67,16 @@ class ChatHistory(Base):
     role = Column(String(20))
     message = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+class GlobalSetting(Base):
+    __tablename__ = "global_settings"
+
+    id = Column(Integer, primary_key=True, index=True, default=1)
+    default_llm_model = Column(String(50), default="llama3-8b-8192")
+    default_embedding_model = Column(String(50), default="all-MiniLM-L6-v2")
+    default_welcome_message = Column(Text, default="Hello! How can I help you today?")
+    default_system_prompt = Column(Text, default="You are an expert sales assistant...")
+    groq_api_key = Column(String(255), nullable=True)
+    maintenance_mode = Column(Boolean, default=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
