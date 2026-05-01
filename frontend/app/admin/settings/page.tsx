@@ -1,12 +1,12 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Select,
   SelectContent,
@@ -15,24 +15,68 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Settings,
-  Shield,
-  Bell,
-  Database,
-  Key,
-  Globe,
-  Save,
-  RefreshCw,
-} from "lucide-react"
+import { Settings, Key, Save, RefreshCw } from "lucide-react"
+import { getAdminSettings, updateAdminSettings } from "@/lib/api" // Asegúrate de importar esto
 
 export default function SettingsPage() {
   const [isSaving, setIsSaving] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [message, setMessage] = useState({ type: "", text: "" })
 
-  const handleSave = () => {
+  const [config, setConfig] = useState({
+    default_llm_model: "llama3-8b-8192",
+    default_embedding_model: "all-MiniLM-L6-v2",
+    default_welcome_message: "",
+    default_system_prompt: "",
+    groq_api_key: "",
+    maintenance_mode: false,
+  })
+
+  // Cargar la configuración desde la base de datos al abrir la página
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const data = await getAdminSettings()
+        if (data) {
+          setConfig({
+            default_llm_model: data.default_llm_model || "llama3-8b-8192",
+            default_embedding_model: data.default_embedding_model || "all-MiniLM-L6-v2",
+            default_welcome_message: data.default_welcome_message || "",
+            default_system_prompt: data.default_system_prompt || "",
+            groq_api_key: data.groq_api_key || "",
+            maintenance_mode: data.maintenance_mode || false,
+          })
+        }
+      } catch (error) {
+        setMessage({ type: "error", text: "Error al cargar la configuración. Revisa tu conexión." })
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchSettings()
+  }, [])
+
+  // Guardar la configuración en la base de datos
+  const handleSave = async () => {
     setIsSaving(true)
-    // Simulate save
-    setTimeout(() => setIsSaving(false), 1000)
+    setMessage({ type: "", text: "" })
+    try {
+      await updateAdminSettings(config)
+      setMessage({ type: "success", text: "¡Configuración global guardada con éxito!" })
+      setTimeout(() => setMessage({ type: "", text: "" }), 3000)
+    } catch (error) {
+      setMessage({ type: "error", text: "Error al guardar la configuración." })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Spinner className="w-8 h-8 text-primary" />
+      </div>
+    )
   }
 
   return (
@@ -40,9 +84,9 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Settings</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Global Settings</h1>
           <p className="text-muted-foreground mt-1">
-            Configure system-wide settings and preferences.
+            Configure default settings for all new tenants in the RAG platform.
           </p>
         </div>
         <Button onClick={handleSave} disabled={isSaving} className="gap-2">
@@ -55,24 +99,22 @@ export default function SettingsPage() {
         </Button>
       </div>
 
+      {message.text && (
+        <div className={`p-4 rounded-md text-sm font-medium ${message.type === 'success' ? 'bg-green-100 text-green-700 border border-green-200' : 'bg-red-100 text-red-700 border border-red-200'}`}>
+          {message.text}
+        </div>
+      )}
+
       {/* Settings Tabs */}
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
           <TabsTrigger value="general" className="gap-2">
             <Settings className="h-4 w-4" />
-            <span className="hidden sm:inline">General</span>
-          </TabsTrigger>
-          <TabsTrigger value="security" className="gap-2">
-            <Shield className="h-4 w-4" />
-            <span className="hidden sm:inline">Security</span>
-          </TabsTrigger>
-          <TabsTrigger value="notifications" className="gap-2">
-            <Bell className="h-4 w-4" />
-            <span className="hidden sm:inline">Notifications</span>
+            <span>AI Defaults</span>
           </TabsTrigger>
           <TabsTrigger value="api" className="gap-2">
             <Key className="h-4 w-4" />
-            <span className="hidden sm:inline">API</span>
+            <span>Master API Keys</span>
           </TabsTrigger>
         </TabsList>
 
@@ -80,58 +122,44 @@ export default function SettingsPage() {
         <TabsContent value="general" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Platform Settings</CardTitle>
+              <CardTitle>Default AI Models</CardTitle>
               <CardDescription>
-                Configure general platform settings and defaults.
+                These models will be assigned to new users by default.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="platform-name">Platform Name</Label>
-                  <Input id="platform-name" defaultValue="RAG Intelligence" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="support-email">Support Email</Label>
-                  <Input id="support-email" type="email" defaultValue="support@raginteligence.com" />
-                </div>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="default-llm">Default LLM Model</Label>
-                <Select defaultValue="llama3-8b-8192">
+                <Select 
+                  value={config.default_llm_model} 
+                  onValueChange={(val) => setConfig({...config, default_llm_model: val})}
+                >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select Model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="llama3-8b-8192">Llama 3 8B (Groq)</SelectItem>
-                    <SelectItem value="gpt-4-turbo">GPT-4 Turbo</SelectItem>
-                    <SelectItem value="claude-3-sonnet">Claude 3 Sonnet</SelectItem>
+                    <SelectItem value="llama3-8b-8192">Llama 3 8B (Groq Fast)</SelectItem>
+                    <SelectItem value="llama3-70b-8192">Llama 3 70B (Groq Advanced)</SelectItem>
+                    <SelectItem value="mixtral-8x7b-32768">Mixtral 8x7B (Groq)</SelectItem>
+                    <SelectItem value="gemma-7b-it">Gemma 7B IT (Groq)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="default-embedding">Default Embedding Model</Label>
-                <Select defaultValue="all-MiniLM-L6-v2">
+                <Select 
+                  value={config.default_embedding_model}
+                  onValueChange={(val) => setConfig({...config, default_embedding_model: val})}
+                >
                   <SelectTrigger>
-                    <SelectValue />
+                    <SelectValue placeholder="Select Model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all-MiniLM-L6-v2">all-MiniLM-L6-v2</SelectItem>
-                    <SelectItem value="text-embedding-3-small">text-embedding-3-small</SelectItem>
+                    <SelectItem value="all-MiniLM-L6-v2">all-MiniLM-L6-v2 (Standard)</SelectItem>
+                    {/* Add more embedding models here if your Python backend supports them */}
                   </SelectContent>
                 </Select>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Maintenance Mode</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Disable user access during maintenance
-                  </p>
-                </div>
-                <Switch />
               </div>
             </CardContent>
           </Card>
@@ -140,7 +168,7 @@ export default function SettingsPage() {
             <CardHeader>
               <CardTitle>Default Prompts</CardTitle>
               <CardDescription>
-                Set default system prompts for new users.
+                Set the base personality and greeting for all new tenant chatbots.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -149,7 +177,9 @@ export default function SettingsPage() {
                 <Textarea
                   id="default-welcome"
                   rows={2}
-                  defaultValue="Hello! How can I help you today?"
+                  value={config.default_welcome_message}
+                  onChange={(e) => setConfig({...config, default_welcome_message: e.target.value})}
+                  placeholder="Hello! How can I help you today?"
                 />
               </div>
 
@@ -157,131 +187,11 @@ export default function SettingsPage() {
                 <Label htmlFor="default-system-prompt">Default System Prompt</Label>
                 <Textarea
                   id="default-system-prompt"
-                  rows={4}
-                  defaultValue="You are an expert sales assistant. Use only the provided context to recommend products. Always suggest the accessories listed in the context to increase cross-selling. If the product is not in the context, politely say you don't have it."
+                  rows={5}
+                  value={config.default_system_prompt}
+                  onChange={(e) => setConfig({...config, default_system_prompt: e.target.value})}
+                  placeholder="You are an expert sales assistant..."
                 />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Security Settings */}
-        <TabsContent value="security" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Authentication</CardTitle>
-              <CardDescription>
-                Configure authentication and session settings.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="session-timeout">Session Timeout (minutes)</Label>
-                <Input id="session-timeout" type="number" defaultValue="60" />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Require Email Verification</Label>
-                  <p className="text-sm text-muted-foreground">
-                    New users must verify their email
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Two-Factor Authentication</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Require 2FA for admin accounts
-                  </p>
-                </div>
-                <Switch />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password-policy">Minimum Password Length</Label>
-                <Input id="password-policy" type="number" defaultValue="8" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Rate Limiting</CardTitle>
-              <CardDescription>
-                Configure API rate limits to prevent abuse.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="rate-chat">Chat Requests (per minute)</Label>
-                  <Input id="rate-chat" type="number" defaultValue="30" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="rate-search">Search Requests (per minute)</Label>
-                  <Input id="rate-search" type="number" defaultValue="60" />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="rate-tokens">Token Limit (per day)</Label>
-                <Input id="rate-tokens" type="number" defaultValue="100000" />
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Notifications Settings */}
-        <TabsContent value="notifications" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Email Notifications</CardTitle>
-              <CardDescription>
-                Configure when to send email notifications.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>New User Registration</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Notify when a new user registers
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Usage Alerts</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Notify when usage exceeds thresholds
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>System Errors</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Notify on critical system errors
-                  </p>
-                </div>
-                <Switch defaultChecked />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Weekly Reports</Label>
-                  <p className="text-sm text-muted-foreground">
-                    Send weekly usage summary
-                  </p>
-                </div>
-                <Switch />
               </div>
             </CardContent>
           </Card>
@@ -291,62 +201,24 @@ export default function SettingsPage() {
         <TabsContent value="api" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>API Configuration</CardTitle>
+              <CardTitle>Master API Configuration</CardTitle>
               <CardDescription>
-                Configure external API connections.
+                Configure the core provider keys used by the Inference Microservice.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="groq-key">Groq API Key</Label>
-                <Input id="groq-key" type="password" placeholder="gsk_..." />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="openai-key">OpenAI API Key</Label>
-                <Input id="openai-key" type="password" placeholder="sk-..." />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="anthropic-key">Anthropic API Key</Label>
-                <Input id="anthropic-key" type="password" placeholder="sk-ant-..." />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Database Connection</CardTitle>
-              <CardDescription>
-                PostgreSQL connection settings.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="db-host">Host</Label>
-                  <Input id="db-host" defaultValue="localhost" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="db-port">Port</Label>
-                  <Input id="db-port" defaultValue="5432" />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="db-name">Database Name</Label>
-                <Input id="db-name" defaultValue="rag_intelligence" />
-              </div>
-
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full bg-green-500" />
-                  <span className="text-sm text-muted-foreground">Connected</span>
-                </div>
-                <Button variant="outline" size="sm" className="gap-2">
-                  <Database className="h-4 w-4" />
-                  Test Connection
-                </Button>
+                <Label htmlFor="groq-key">Groq API Key (Master)</Label>
+                <Input 
+                  id="groq-key" 
+                  type="password" 
+                  placeholder="gsk_..." 
+                  value={config.groq_api_key}
+                  onChange={(e) => setConfig({...config, groq_api_key: e.target.value})}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  This key will be used to generate inferences for all tenants.
+                </p>
               </div>
             </CardContent>
           </Card>

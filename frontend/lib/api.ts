@@ -19,6 +19,7 @@ export const ADMIN_ENDPOINTS = {
   users: `${CORE_API_URL}/api/v1/admin/users`,
   models: `${CORE_API_URL}/api/v1/admin/models`,
   metrics: `${CORE_API_URL}/api/v1/admin/metrics`,
+  settings: `${CORE_API_URL}/api/v1/admin/settings`, // <--- AÑADE ESTA LÍNEA
 }
 
 // User endpoints -> Usan el Core API (Microservicio 2)
@@ -184,6 +185,27 @@ export interface AdminMetrics {
 
 export async function getAdminMetrics(): Promise<AdminMetrics> {
   return apiGet<AdminMetrics>(ADMIN_ENDPOINTS.metrics)
+}
+
+// ==========================================
+// ADMIN SETTINGS (Configuraciones Globales)
+// ==========================================
+
+export interface GlobalSettings {
+  default_llm_model: string
+  default_embedding_model: string
+  default_welcome_message: string
+  default_system_prompt: string
+  groq_api_key?: string
+  maintenance_mode: boolean
+}
+
+export async function getAdminSettings(): Promise<GlobalSettings> {
+  return apiGet<GlobalSettings>(ADMIN_ENDPOINTS.settings)
+}
+
+export async function updateAdminSettings(data: Partial<GlobalSettings>): Promise<{ message: string }> {
+  return apiPut<{ message: string }>(ADMIN_ENDPOINTS.settings, data as Record<string, unknown>)
 }
 
 // ==========================================
