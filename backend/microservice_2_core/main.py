@@ -5,6 +5,8 @@ from config.settings import settings
 from api.routes import auth_routes, api_keys, admin_routes
 import logging
 from models.schema import User, GlobalSetting
+
+
 from security.jwt_handler import get_password_hash
 
 logger = logging.getLogger(__name__)
@@ -72,6 +74,8 @@ def create_initial_admin():
 def on_startup():
     print("Iniciando Core API...")
     init_db()
+
+    
     create_initial_admin()
 
 @app.get("/")
