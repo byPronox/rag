@@ -3,6 +3,7 @@ from jose import jwt
 from passlib.context import CryptContext
 import secrets
 from config.settings import settings
+from fastapi import Depends, HTTPException, status, Request
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
