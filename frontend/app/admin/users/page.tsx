@@ -33,17 +33,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Search, Plus, MoreVertical, Trash2, ShieldAlert } from "lucide-react"
+import { Search, Plus, MoreVertical, Trash2 } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { getUsers, createUser, deleteUser } from "@/lib/api" // Ensure these exist in your lib/api.ts
+import { getUsers, createUser, deleteUser } from "@/lib/api"
 
-interface User {
+// CAMBIO 1: Renombramos a AdminUser para que no choque con el User de auth-context
+export interface AdminUser {
   id: number
   email: string
   role: "admin" | "user"
@@ -76,7 +76,7 @@ function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
       setEmail("")
       setPassword("")
       setRole("user")
-      onUserAdded() // Refresh the parent table
+      onUserAdded() // Actualiza la tabla del padre
     } catch (err: any) {
       setError(err.message || "Failed to create user")
     } finally {
@@ -152,7 +152,8 @@ function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
 // -------------------------------------------------------------
 // Component: Action Menu (Delete)
 // -------------------------------------------------------------
-function UserActionsMenu({ user, onActionComplete }: { user: User, onActionComplete: () => void }) {
+// CAMBIO 2: Usamos AdminUser aquí también
+function UserActionsMenu({ user, onActionComplete }: { user: AdminUser, onActionComplete: () => void }) {
   const handleDelete = async () => {
     try {
       await deleteUser(user.id)
@@ -205,17 +206,18 @@ function UserActionsMenu({ user, onActionComplete }: { user: User, onActionCompl
 // Main Page Component
 // -------------------------------------------------------------
 export default function UsersPage() {
-  const [users, setUsers] = useState<User[]>([])
+  // CAMBIO 3: El estado ahora es un array de AdminUser
+  const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterRole, setFilterRole] = useState<string>("all")
   const [filterStatus, setFilterStatus] = useState<string>("all")
 
-  // Fetch users from API
   const fetchUsers = async () => {
     setLoading(true)
     try {
-      const data = await getUsers()
+      // CAMBIO 4: Forzamos el tipado para que TS sepa que el backend nos envía los datos completos
+      const data = (await getUsers()) as unknown as AdminUser[]
       setUsers(data)
     } catch (error) {
       console.error("Error fetching users:", error)
