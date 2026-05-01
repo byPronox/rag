@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from database.connection import init_db
+from database.connection import init_db, SessionLocal 
 from config.settings import settings
 from api.routes import auth_routes, api_keys, admin_routes
 import logging
@@ -75,7 +75,7 @@ def on_startup():
     print("Iniciando Core API...")
     init_db()
 
-    
+
     create_initial_admin()
 
 @app.get("/")
