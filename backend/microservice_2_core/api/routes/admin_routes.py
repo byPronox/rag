@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from database.connection import get_db
 from models.schema import User, UserConfig, GlobalSetting
 from security.jwt_handler import get_current_admin, get_password_hash
-from schemas.pydantic_models import GlobalSettingsUpdate, UserCreate
+from schemas.pydantic_models import GlobalSettingsUpdate, UserCreate, ApiKeyResponse
 import secrets
 
 router = APIRouter()
@@ -110,3 +110,20 @@ def delete_user(user_id: int, admin: User = Depends(get_current_admin), db: Sess
     db.delete(user)
     db.commit()
     return {"message": "User deleted"}
+
+@router.post("/users/{user_id}/api-key", response_model=ApiKeyResponse)
+def regenerate_user_api_key(user_id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    """Regenera la llave de integración (Odoo) para un usuario específico"""
+    config = db.query(UserConfig).filter(UserConfig.user_id == user_id).first()
+    
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuración de usuario no encontrada")
+    
+    # Generamos la nueva llave (usando el mismo formato que ya tenías)
+    new_key = f"rag_{secrets.token_urlsafe(32)}"
+    config.system_api_key = new_key
+    
+    db.commit()
+    
+    return {"message": "Guarda esta clave, no se volverá a mostrar", "api_key": new_key}
+

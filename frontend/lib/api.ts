@@ -208,6 +208,10 @@ export async function updateAdminSettings(data: Partial<GlobalSettings>): Promis
   return apiPut<{ message: string }>(ADMIN_ENDPOINTS.settings, data as Record<string, unknown>)
 }
 
+export async function regenerateUserApiKey(userId: number): Promise<{ message: string, api_key: string }> {
+  return apiPost<{ message: string, api_key: string }>(`${ADMIN_ENDPOINTS.users}/${userId}/api-key`, {})
+}
+
 // ==========================================
 // USER-SPECIFIC FUNCTIONS
 // ==========================================

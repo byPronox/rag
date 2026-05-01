@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -33,16 +33,18 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Search, Plus, MoreVertical, Trash2 } from "lucide-react"
+// Importamos los íconos necesarios para la nueva función de API Key
+import { Search, Plus, MoreVertical, Trash2, Key, Copy, CheckCircle2 } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { getUsers, createUser, deleteUser } from "@/lib/api"
+// Asegúrate de importar regenerateUserApiKey desde tu lib/api
+import { getUsers, createUser, deleteUser, regenerateUserApiKey } from "@/lib/api"
 
-// CAMBIO 1: Renombramos a AdminUser para que no choque con el User de auth-context
 export interface AdminUser {
   id: number
   email: string
@@ -150,10 +152,14 @@ function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
 }
 
 // -------------------------------------------------------------
-// Component: Action Menu (Delete)
+// Component: Action Menu (Delete & Regenerate Key)
 // -------------------------------------------------------------
-// CAMBIO 2: Usamos AdminUser aquí también
 function UserActionsMenu({ user, onActionComplete }: { user: AdminUser, onActionComplete: () => void }) {
+  const [showKeyDialog, setShowKeyDialog] = useState(false)
+  const [newKey, setNewKey] = useState("")
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [copied, setCopied] = useState(false)
+
   const handleDelete = async () => {
     try {
       await deleteUser(user.id)
@@ -163,42 +169,113 @@ function UserActionsMenu({ user, onActionComplete }: { user: AdminUser, onAction
     }
   }
 
+  const handleRegenerateKey = async () => {
+    setIsGenerating(true)
+    try {
+      const res = await regenerateUserApiKey(user.id)
+      setNewKey(res.api_key)
+      setShowKeyDialog(true)
+    } catch (error) {
+      alert("Error al generar la nueva API Key")
+    } finally {
+      setIsGenerating(false)
+    }
+  }
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(newKey)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon">
-          <MoreVertical className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <DropdownMenuItem
-              className="gap-2 text-destructive"
-              onSelect={(e) => e.preventDefault()}
-            >
-              <Trash2 className="h-4 w-4" />
-              Delete User
-            </DropdownMenuItem>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete User</AlertDialogTitle>
-              <AlertDialogDescription>
-                Are you sure you want to delete {user.email}? This action cannot be
-                undone and will remove all associated data.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                Delete
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          
+          {/* NUEVO BOTÓN: Regenerar API Key para Odoo */}
+          <DropdownMenuItem 
+            className="gap-2 cursor-pointer"
+            onSelect={(e) => {
+              e.preventDefault() // Evita que se cierre el menú antes de abrir el modal
+              handleRegenerateKey()
+            }}
+            disabled={isGenerating}
+          >
+            <Key className="h-4 w-4 text-blue-600" />
+            <span>{isGenerating ? "Generating..." : "Regenerate Odoo Key"}</span>
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <DropdownMenuItem
+                className="gap-2 text-destructive cursor-pointer"
+                onSelect={(e) => e.preventDefault()}
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete User
+              </DropdownMenuItem>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete User</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete {user.email}? This action cannot be
+                  undone and will remove all associated data.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* MODAL PARA MOSTRAR LA NUEVA LLAVE */}
+      <Dialog open={showKeyDialog} onOpenChange={setShowKeyDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>New API Key Generated</DialogTitle>
+            <DialogDescription className="text-red-600 font-medium">
+              Please copy this key now and update it in the Odoo module. For security reasons, you will not be able to see it again.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center space-x-2 mt-4">
+            <div className="grid flex-1 gap-2">
+              <Label htmlFor="apikey" className="sr-only">
+                API Key
+              </Label>
+              <Input
+                id="apikey"
+                defaultValue={newKey}
+                readOnly
+                className="font-mono text-sm bg-muted"
+              />
+            </div>
+            <Button type="button" size="sm" className="px-3" onClick={handleCopy}>
+              <span className="sr-only">Copy</span>
+              {copied ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+            </Button>
+          </div>
+          <DialogFooter className="sm:justify-start mt-4">
+            <Button type="button" variant="secondary" onClick={() => setShowKeyDialog(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 
@@ -206,7 +283,6 @@ function UserActionsMenu({ user, onActionComplete }: { user: AdminUser, onAction
 // Main Page Component
 // -------------------------------------------------------------
 export default function UsersPage() {
-  // CAMBIO 3: El estado ahora es un array de AdminUser
   const [users, setUsers] = useState<AdminUser[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -216,7 +292,6 @@ export default function UsersPage() {
   const fetchUsers = async () => {
     setLoading(true)
     try {
-      // CAMBIO 4: Forzamos el tipado para que TS sepa que el backend nos envía los datos completos
       const data = (await getUsers()) as unknown as AdminUser[]
       setUsers(data)
     } catch (error) {
