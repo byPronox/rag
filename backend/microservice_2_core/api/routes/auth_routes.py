@@ -41,8 +41,12 @@ def get_current_user_info(current_user: User = Depends(get_current_user)):
 
 @router.post("/logout")
 def logout(response: Response):
-    # Para cerrar sesión, simplemente borramos la cookie
-    response.delete_cookie(key="access_token")
+    response.delete_cookie(
+        key="access_token",
+        httponly=True,
+        samesite="none",  
+        secure=True       
+    )
     return {"message": "Sesión cerrada"}
 
 @router.post("/register", summary="Registrar nuevo Tenant")
