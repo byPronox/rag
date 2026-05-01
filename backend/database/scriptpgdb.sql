@@ -77,3 +77,19 @@ CREATE TABLE chat_history (
     message TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE global_settings (
+    id INTEGER PRIMARY KEY DEFAULT 1, -- Siempre será el ID 1
+    default_llm_model VARCHAR(50) DEFAULT 'llama3-8b-8192',
+    default_embedding_model VARCHAR(50) DEFAULT 'all-MiniLM-L6-v2',
+    default_welcome_message TEXT DEFAULT 'Hello! How can I help you today?',
+    default_system_prompt TEXT DEFAULT 'You are an expert sales assistant...',
+    groq_api_key VARCHAR(255),
+    maintenance_mode BOOLEAN DEFAULT FALSE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    -- Asegurarnos de que solo exista una fila en esta tabla
+    CONSTRAINT single_row CHECK (id = 1) 
+);
+
+-- 2. Insertar la fila inicial por defecto
+INSERT INTO global_settings (id) VALUES (1) ON CONFLICT DO NOTHING;

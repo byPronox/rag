@@ -67,3 +67,4 @@ class ChatHistory(Base):
     role = Column(String(20))
     message = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    

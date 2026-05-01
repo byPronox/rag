@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Spinner } from "@/components/ui/spinner"
 import {
   Dialog,
   DialogContent,
@@ -32,16 +33,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import {
-  Search,
-  Plus,
-  MoreVertical,
-  Edit2,
-  Trash2,
-  Eye,
-  UserCheck,
-  UserX,
-} from "lucide-react"
+import { Search, Plus, MoreVertical, Trash2, ShieldAlert } from "lucide-react"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,6 +41,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { getUsers, createUser, deleteUser } from "@/lib/api" // Ensure these exist in your lib/api.ts
 
 interface User {
   id: number
@@ -61,64 +54,34 @@ interface User {
   total_tokens: number
 }
 
-// Placeholder data
-const mockUsers: User[] = [
-  {
-    id: 1,
-    email: "stefanjativa@gmail.com",
-    role: "admin",
-    is_active: true,
-    created_at: "2024-01-15",
-    llm_model: "llama3-8b-8192",
-    total_queries: 1250,
-    total_tokens: 450000,
-  },
-  {
-    id: 2,
-    email: "empresa1@example.com",
-    role: "user",
-    is_active: true,
-    created_at: "2024-02-20",
-    llm_model: "gpt-4-turbo",
-    total_queries: 890,
-    total_tokens: 320000,
-  },
-  {
-    id: 3,
-    email: "empresa2@example.com",
-    role: "user",
-    is_active: false,
-    created_at: "2024-03-10",
-    llm_model: "claude-3-sonnet",
-    total_queries: 450,
-    total_tokens: 180000,
-  },
-  {
-    id: 4,
-    email: "empresa3@example.com",
-    role: "user",
-    is_active: true,
-    created_at: "2024-03-15",
-    llm_model: "llama3-8b-8192",
-    total_queries: 120,
-    total_tokens: 45000,
-  },
-]
-
-function AddUserDialog() {
+// -------------------------------------------------------------
+// Component: Add User Dialog
+// -------------------------------------------------------------
+function AddUserDialog({ onUserAdded }: { onUserAdded: () => void }) {
   const [open, setOpen] = useState(false)
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [role, setRole] = useState<string>("user")
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState("")
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: Call API to create user
-    console.log({ email, password, role })
-    setOpen(false)
-    setEmail("")
-    setPassword("")
-    setRole("user")
+    setLoading(true)
+    setError("")
+
+    try {
+      await createUser({ email, password, role })
+      setOpen(false)
+      setEmail("")
+      setPassword("")
+      setRole("user")
+      onUserAdded() // Refresh the parent table
+    } catch (err: any) {
+      setError(err.message || "Failed to create user")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -133,10 +96,11 @@ function AddUserDialog() {
         <DialogHeader>
           <DialogTitle>Add New User</DialogTitle>
           <DialogDescription>
-            Create a new user account. They will receive an email to set up their account.
+            Create a new account manually.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {error && <div className="text-sm text-red-500 bg-red-100 p-2 rounded">{error}</div>}
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -172,10 +136,12 @@ function AddUserDialog() {
             </Select>
           </div>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={loading}>
               Cancel
             </Button>
-            <Button type="submit">Create User</Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Creating..." : "Create User"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -183,7 +149,19 @@ function AddUserDialog() {
   )
 }
 
-function UserActionsMenu({ user }: { user: User }) {
+// -------------------------------------------------------------
+// Component: Action Menu (Delete)
+// -------------------------------------------------------------
+function UserActionsMenu({ user, onActionComplete }: { user: User, onActionComplete: () => void }) {
+  const handleDelete = async () => {
+    try {
+      await deleteUser(user.id)
+      onActionComplete()
+    } catch (err) {
+      alert("Failed to delete user.")
+    }
+  }
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -192,27 +170,6 @@ function UserActionsMenu({ user }: { user: User }) {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem className="gap-2">
-          <Eye className="h-4 w-4" />
-          View Details
-        </DropdownMenuItem>
-        <DropdownMenuItem className="gap-2">
-          <Edit2 className="h-4 w-4" />
-          Edit User
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {user.is_active ? (
-          <DropdownMenuItem className="gap-2 text-yellow-600">
-            <UserX className="h-4 w-4" />
-            Deactivate
-          </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem className="gap-2 text-green-600">
-            <UserCheck className="h-4 w-4" />
-            Activate
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuSeparator />
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <DropdownMenuItem
@@ -233,7 +190,7 @@ function UserActionsMenu({ user }: { user: User }) {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
                 Delete
               </AlertDialogAction>
             </AlertDialogFooter>
@@ -244,12 +201,34 @@ function UserActionsMenu({ user }: { user: User }) {
   )
 }
 
+// -------------------------------------------------------------
+// Main Page Component
+// -------------------------------------------------------------
 export default function UsersPage() {
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [filterRole, setFilterRole] = useState<string>("all")
   const [filterStatus, setFilterStatus] = useState<string>("all")
 
-  const filteredUsers = mockUsers.filter((user) => {
+  // Fetch users from API
+  const fetchUsers = async () => {
+    setLoading(true)
+    try {
+      const data = await getUsers()
+      setUsers(data)
+    } catch (error) {
+      console.error("Error fetching users:", error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchUsers()
+  }, [])
+
+  const filteredUsers = users.filter((user) => {
     const matchesSearch = user.email.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesRole = filterRole === "all" || user.role === filterRole
     const matchesStatus =
@@ -259,6 +238,10 @@ export default function UsersPage() {
     return matchesSearch && matchesRole && matchesStatus
   })
 
+  if (loading) {
+    return <div className="flex items-center justify-center min-h-[50vh]"><Spinner className="w-8 h-8 text-primary" /></div>
+  }
+
   return (
     <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
@@ -266,24 +249,24 @@ export default function UsersPage() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">User Management</h1>
           <p className="text-muted-foreground mt-1">
-            Manage users, their roles, and permissions.
+            Manage your tenants and system administrators.
           </p>
         </div>
-        <AddUserDialog />
+        <AddUserDialog onUserAdded={fetchUsers} />
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-semibold">{mockUsers.length}</div>
+            <div className="text-2xl font-semibold">{users.length}</div>
             <p className="text-sm text-muted-foreground">Total Users</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-semibold text-green-600">
-              {mockUsers.filter((u) => u.is_active).length}
+              {users.filter((u) => u.is_active).length}
             </div>
             <p className="text-sm text-muted-foreground">Active Users</p>
           </CardContent>
@@ -291,17 +274,9 @@ export default function UsersPage() {
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-semibold text-primary">
-              {mockUsers.filter((u) => u.role === "admin").length}
+              {users.filter((u) => u.role === "admin").length}
             </div>
             <p className="text-sm text-muted-foreground">Administrators</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-semibold">
-              {mockUsers.reduce((acc, u) => acc + u.total_queries, 0).toLocaleString()}
-            </div>
-            <p className="text-sm text-muted-foreground">Total Queries</p>
           </CardContent>
         </Card>
       </div>
@@ -360,13 +335,7 @@ export default function UsersPage() {
                     Role
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Status
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     LLM Model
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                    Usage
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
                     Actions
@@ -378,9 +347,6 @@ export default function UsersPage() {
                   <tr key={user.id} className="hover:bg-muted/50 transition-colors">
                     <td className="px-6 py-4">
                       <div className="font-medium text-foreground">{user.email}</div>
-                      <div className="text-xs text-muted-foreground">
-                        Joined {new Date(user.created_at).toLocaleDateString()}
-                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span
@@ -394,34 +360,10 @@ export default function UsersPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span
-                        className={`inline-flex items-center gap-1.5 text-xs font-medium ${
-                          user.is_active ? "text-green-600" : "text-muted-foreground"
-                        }`}
-                      >
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full ${
-                            user.is_active ? "bg-green-500" : "bg-muted-foreground"
-                          }`}
-                        />
-                        {user.is_active ? "Active" : "Inactive"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
                       <span className="text-sm text-foreground">{user.llm_model}</span>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm">
-                        <div className="text-foreground">
-                          {user.total_queries.toLocaleString()} queries
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {(user.total_tokens / 1000).toFixed(0)}K tokens
-                        </div>
-                      </div>
-                    </td>
                     <td className="px-6 py-4 text-right">
-                      <UserActionsMenu user={user} />
+                      <UserActionsMenu user={user} onActionComplete={fetchUsers} />
                     </td>
                   </tr>
                 ))}
