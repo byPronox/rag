@@ -28,7 +28,7 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), 
     access_token = create_access_token(data={"sub": user.email})
     
     response.set_cookie(
-        key="access_token", 
+        key="rag_token", 
         value=f"Bearer {access_token}", 
         httponly=True,   
         samesite="none",
@@ -54,7 +54,7 @@ def get_current_user_info(current_user: User = Depends(get_current_user)):
 @router.post("/logout")
 def logout(response: Response):
     response.delete_cookie(
-        key="access_token",
+        key="rag_token",
         httponly=True,
         samesite="none",  
         path="/",

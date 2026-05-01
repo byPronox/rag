@@ -7,7 +7,7 @@ from config.settings import settings
 
 def get_token_from_request(request: Request) -> str:
     # 1. First attempt: Extract from Cookies (For Next.js frontend)
-    token = request.cookies.get("access_token")
+    token = request.cookies.get("rag_token")
     
     # 2. Second attempt: Extract from Authorization Header (For Postman/Swagger)
     if not token:
