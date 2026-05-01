@@ -6,23 +6,35 @@ from models.schema import User
 from config.settings import settings
 
 def get_token_from_request(request: Request) -> str:
-    # 1. First attempt: Extract from Cookies (For Next.js frontend)
+    # --- INICIO MODO DEBUG ---
+    print("\n" + "="*50)
+    print(f"🚨 DEBUG AUTH - NUEVA PETICIÓN 🚨")
+    print(f"Ruta: {request.method} {request.url.path}")
+    print(f"Origen (Frontend): {request.headers.get('origin', 'No enviado')}")
+    print(f"Cookies Crudas: {request.cookies}")
+    print(f"Header Authorization: {request.headers.get('authorization', 'Vacio')}")
+    # --- FIN MODO DEBUG ---
+
+    # 1. Intentamos leer la cookie
     token = request.cookies.get("rag_token")
+    print(f"🔍 Token extraído de Cookie: {'SÍ (Oculto por seguridad)' if token else 'NO ENCONTRADO'}")
     
-    # 2. Second attempt: Extract from Authorization Header (For Postman/Swagger)
+    # 2. Intentamos leer el header si no hay cookie
     if not token:
         auth_header = request.headers.get("Authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header.replace("Bearer ", "")
+            print("🔍 Token extraído de Header: SÍ")
             
-    # 3. If not found in either place, deny access
+    print("="*50 + "\n")
+
+    # 3. Si no hay token en ningún lado, fallamos
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated"
+            detail="Not authenticated (Mira los logs de Railway para ver por qué)"
         )
         
-    # Clean up "Bearer " prefix if it was somehow included in the cookie payload
     return token.replace("Bearer ", "") if "Bearer" in token else token
 
 def get_current_user(token: str = Depends(get_token_from_request), db: Session = Depends(get_db)) -> User:
