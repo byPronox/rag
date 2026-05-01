@@ -155,16 +155,16 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        {/* Footer */}
+        {/* Footer Modificado */}
         <div className="mt-8 text-center">
           <p className="text-sm text-[var(--on-surface-variant)]">
             Don&apos;t have an account?{" "}
-            <Link
-              href="/register"
+            <a
+              href="mailto:support@raginteligence.com"
               className="text-primary hover:text-primary/80 font-medium ml-1 transition-colors"
             >
-              Sign up
-            </Link>
+              Contact us
+            </a>
           </p>
         </div>
       </main>
