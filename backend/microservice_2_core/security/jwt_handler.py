@@ -1,9 +1,9 @@
-from datetime import datetime, timedelta
-from jose import jwt
-from passlib.context import CryptContext
-import secrets
-from config.settings import settings
 from fastapi import Depends, HTTPException, status, Request
+from jose import jwt, JWTError
+from sqlalchemy.orm import Session 
+from database.connection import get_db
+from models.schema import User
+from config.settings import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
