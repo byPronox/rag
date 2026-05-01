@@ -142,7 +142,7 @@ def get_all_models(admin: User = Depends(get_current_admin), db: Session = Depen
     """Obtiene todos los modelos guardados en la base de datos local."""
     return db.query(AIModel).all()
 
-@router.put("/models/{model_id}", response_model=AIModelResponse)
+@router.put("/models/{model_id:path}", response_model=AIModelResponse)
 def update_model_status(model_id: str, data: AIModelUpdate, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
     """Activa o desactiva un modelo específico."""
     model = db.query(AIModel).filter(AIModel.id == model_id).first()
