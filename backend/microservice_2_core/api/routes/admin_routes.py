@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from database.connection import get_db
@@ -204,15 +204,3 @@ def sync_models_with_groq(admin: User = Depends(get_current_admin), db: Session 
 
     db.commit()
     return {"message": f"Sincronización exitosa. Se detectaron y guardaron {models_added} modelos nuevos."}
-
-
-
-@router.post("/debug-cors")
-def debug_cors_post(request: Request):
-    """Endpoint temporal para diagnosticar por qué fallan los POST"""
-    return {
-        "metodo": request.method,
-        "cookies_recibidas": request.cookies,
-        "headers_recibidos": dict(request.headers),
-        "origen": request.headers.get("origin")
-    }

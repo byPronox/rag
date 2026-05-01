@@ -7,7 +7,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Brain, Sparkles, Settings2, RefreshCw } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
-import { getModels, updateModel, AIModel } from "@/lib/api" // Usamos tus funciones reales
+import { getModels, updateModel, syncModels, AIModel } from "@/lib/api"
 
 function ModelCard({ model, onToggle }: { model: AIModel; onToggle: (model: AIModel) => void }) {
   const [isToggling, setIsToggling] = useState(false)
@@ -101,8 +101,8 @@ export default function ModelsPage() {
   const handleSyncModels = async () => {
     setIsSyncing(true)
     try {
-      // Nota: Debes crear este endpoint `POST /admin/models/sync` en tu backend y en lib/api.ts
-      await fetch(`${process.env.NEXT_PUBLIC_CORE_API_URL}/api/v1/admin/models/sync`, { method: "POST" })
+      // Usamos tu función de api.ts que YA tiene las credenciales configuradas
+      await syncModels() 
       await fetchModels()
     } catch (error) {
       alert("Error sincronizando modelos con Groq.")
