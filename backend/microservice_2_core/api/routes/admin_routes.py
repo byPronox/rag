@@ -5,7 +5,7 @@ from database.connection import get_db
 from models.schema import User, UserConfig, GlobalSetting
 from security.jwt_handler import get_current_admin, get_password_hash
 from schemas.pydantic_models import GlobalSettingsUpdate, UserCreate, ApiKeyResponse
-import secrets
+import secrets, requests
 
 router = APIRouter()
 
@@ -132,3 +132,74 @@ def regenerate_user_api_key(user_id: int, admin: User = Depends(get_current_admi
     
     return {"message": "Guarda esta clave, no se volverá a mostrar", "api_key": new_key}
 
+# ==========================================
+# 4. ENDPOINTS: GESTIÓN DE MODELOS AI (/models)
+# ==========================================
+
+@router.get("/models", response_model=list[AIModelResponse])
+def get_all_models(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    """Obtiene todos los modelos guardados en la base de datos local."""
+    return db.query(AIModel).all()
+
+@router.put("/models/{model_id}", response_model=AIModelResponse)
+def update_model_status(model_id: str, data: AIModelUpdate, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    """Activa o desactiva un modelo específico."""
+    model = db.query(AIModel).filter(AIModel.id == model_id).first()
+    if not model:
+        raise HTTPException(status_code=404, detail="Modelo no encontrado")
+        
+    model.is_active = data.is_active
+    db.commit()
+    db.refresh(model)
+    return model
+
+@router.post("/models/sync")
+def sync_models_with_groq(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    """Se conecta a Groq con la Master API Key, descarga los modelos disponibles y los guarda."""
+    
+    # 1. Obtenemos la llave maestra de la base de datos
+    settings = db.query(GlobalSetting).filter(GlobalSetting.id == 1).first()
+    if not settings or not settings.groq_api_key:
+        raise HTTPException(status_code=400, detail="Groq API Key no configurada. Ve a Global Settings primero.")
+
+    headers = {
+        "Authorization": f"Bearer {settings.groq_api_key}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        # 2. Llamamos a la API real de Groq
+        response = requests.get("https://api.groq.com/openai/v1/models", headers=headers)
+        response.raise_for_status()
+        groq_data = response.json()
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error conectando con Groq: {str(e)}")
+
+    models_added = 0
+    
+    # 3. Procesamos y guardamos los modelos
+    for item in groq_data.get("data", []):
+        model_id = item.get("id")
+        
+        # Ignoramos modelos de sistema internos de Groq (suele haber basura ahí)
+        if "whisper" in model_id.lower() or "tool" in model_id.lower():
+            continue
+            
+        existing = db.query(AIModel).filter(AIModel.id == model_id).first()
+        
+        if not existing:
+            # Si es nuevo, lo creamos y lo guardamos apagado por seguridad
+            new_model = AIModel(
+                id=model_id,
+                name=model_id.upper(), # Formato básico de nombre
+                provider="Groq",
+                type="llm",
+                is_active=False, 
+                description=f"Official model {model_id} hosted on Groq.",
+                context_window=item.get("context_window", 8192) # Default fallback
+            )
+            db.add(new_model)
+            models_added += 1
+
+    db.commit()
+    return {"message": f"Sincronización exitosa. Se detectaron y guardaron {models_added} modelos nuevos."}

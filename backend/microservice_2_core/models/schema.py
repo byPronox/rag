@@ -79,4 +79,16 @@ class GlobalSetting(Base):
     groq_api_key = Column(String(255), nullable=True)
     maintenance_mode = Column(Boolean, default=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
-    
+
+class AIModel(Base):
+    __tablename__ = "ai_models"
+
+    id = Column(String(100), primary_key=True, index=True)
+    name = Column(String(100), nullable=False)
+    provider = Column(String(50), default="Groq")
+    type = Column(String(20), default="llm")
+    is_active = Column(Boolean, default=False)
+    description = Column(Text, nullable=True)
+    context_window = Column(Integer, nullable=True)
+    dimensions = Column(Integer, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

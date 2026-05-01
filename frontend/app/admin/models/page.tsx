@@ -1,184 +1,25 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Brain, Sparkles, Settings2 } from "lucide-react"
+import { Brain, Sparkles, Settings2, RefreshCw } from "lucide-react"
+import { Spinner } from "@/components/ui/spinner"
+import { getModels, updateModel, AIModel } from "@/lib/api" // Usamos tus funciones reales
 
-interface AIModel {
-  id: string
-  name: string
-  provider: string
-  type: "llm" | "embedding"
-  is_active: boolean
-  description: string
-  context_window?: number
-  dimensions?: number
-}
+function ModelCard({ model, onToggle }: { model: AIModel; onToggle: (model: AIModel) => void }) {
+  const [isToggling, setIsToggling] = useState(false)
 
-// Placeholder data
-const mockLLMModels: AIModel[] = [
-  {
-    id: "llama3-8b-8192",
-    name: "Llama 3 8B",
-    provider: "Groq",
-    type: "llm",
-    is_active: true,
-    description: "Fast inference LLM model from Meta, optimized for speed.",
-    context_window: 8192,
-  },
-  {
-    id: "gpt-4-turbo",
-    name: "GPT-4 Turbo",
-    provider: "OpenAI",
-    type: "llm",
-    is_active: true,
-    description: "Latest GPT-4 model with improved performance and lower costs.",
-    context_window: 128000,
-  },
-  {
-    id: "claude-3-sonnet",
-    name: "Claude 3 Sonnet",
-    provider: "Anthropic",
-    type: "llm",
-    is_active: false,
-    description: "Balanced Claude model for various tasks.",
-    context_window: 200000,
-  },
-  {
-    id: "gemini-pro",
-    name: "Gemini Pro",
-    provider: "Google",
-    type: "llm",
-    is_active: false,
-    description: "Google's most capable model for text generation.",
-    context_window: 32000,
-  },
-]
-
-const mockEmbeddingModels: AIModel[] = [
-  {
-    id: "all-MiniLM-L6-v2",
-    name: "all-MiniLM-L6-v2",
-    provider: "Sentence Transformers",
-    type: "embedding",
-    is_active: true,
-    description: "Fast and efficient embedding model for semantic search.",
-    dimensions: 384,
-  },
-  {
-    id: "text-embedding-3-small",
-    name: "text-embedding-3-small",
-    provider: "OpenAI",
-    type: "embedding",
-    is_active: false,
-    description: "OpenAI's small embedding model with good performance.",
-    dimensions: 1536,
-  },
-  {
-    id: "text-embedding-3-large",
-    name: "text-embedding-3-large",
-    provider: "OpenAI",
-    type: "embedding",
-    is_active: false,
-    description: "OpenAI's large embedding model for best quality.",
-    dimensions: 3072,
-  },
-]
-
-function AddModelDialog() {
-  const [open, setOpen] = useState(false)
+  const handleToggle = async () => {
+    setIsToggling(true)
+    await onToggle(model)
+    setIsToggling(false)
+  }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="gap-2">
-          <Plus className="h-4 w-4" />
-          Add Model
-        </Button>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add New AI Model</DialogTitle>
-          <DialogDescription>
-            Configure a new AI model for users to select.
-          </DialogDescription>
-        </DialogHeader>
-        <form className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="model-id">Model ID</Label>
-            <Input id="model-id" placeholder="e.g., gpt-4-turbo" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="model-name">Display Name</Label>
-            <Input id="model-name" placeholder="e.g., GPT-4 Turbo" />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="provider">Provider</Label>
-            <Select>
-              <SelectTrigger>
-                <SelectValue placeholder="Select provider" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="openai">OpenAI</SelectItem>
-                <SelectItem value="anthropic">Anthropic</SelectItem>
-                <SelectItem value="google">Google</SelectItem>
-                <SelectItem value="groq">Groq</SelectItem>
-                <SelectItem value="sentence-transformers">Sentence Transformers</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="type">Model Type</Label>
-            <Select>
-              <SelectTrigger>
-                <SelectValue placeholder="Select type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="llm">LLM (Language Model)</SelectItem>
-                <SelectItem value="embedding">Embedding Model</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Input id="description" placeholder="Brief description of the model" />
-          </div>
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">Add Model</Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function ModelCard({ model, onToggle }: { model: AIModel; onToggle: (id: string) => void }) {
-  return (
-    <Card className={!model.is_active ? "opacity-60" : ""}>
+    <Card className={!model.is_active ? "opacity-60 bg-muted/30" : ""}>
       <CardContent className="p-6">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4">
@@ -198,25 +39,23 @@ function ModelCard({ model, onToggle }: { model: AIModel; onToggle: (id: string)
             <div className="flex-1">
               <div className="flex items-center gap-2">
                 <h3 className="font-medium text-foreground">{model.name}</h3>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground capitalize">
                   {model.provider}
                 </span>
               </div>
-              <p className="text-sm text-muted-foreground mt-1">{model.description}</p>
-              <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                {model.context_window && (
-                  <span>Context: {(model.context_window / 1000).toFixed(0)}K tokens</span>
-                )}
-                {model.dimensions && <span>Dimensions: {model.dimensions}</span>}
-              </div>
+              <p className="text-sm text-muted-foreground mt-1 text-mono text-xs">ID: {model.id}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Switch
-              checked={model.is_active}
-              onCheckedChange={() => onToggle(model.id)}
-            />
-            <Button variant="ghost" size="icon">
+            {isToggling ? (
+              <Spinner className="h-4 w-4" />
+            ) : (
+              <Switch
+                checked={model.is_active}
+                onCheckedChange={handleToggle}
+              />
+            )}
+            <Button variant="ghost" size="icon" disabled>
               <Settings2 className="h-4 w-4" />
             </Button>
           </div>
@@ -227,19 +66,56 @@ function ModelCard({ model, onToggle }: { model: AIModel; onToggle: (id: string)
 }
 
 export default function ModelsPage() {
-  const [llmModels, setLLMModels] = useState(mockLLMModels)
-  const [embeddingModels, setEmbeddingModels] = useState(mockEmbeddingModels)
+  const [models, setModels] = useState<AIModel[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSyncing, setIsSyncing] = useState(false)
 
-  const toggleLLMModel = (id: string) => {
-    setLLMModels((models) =>
-      models.map((m) => (m.id === id ? { ...m, is_active: !m.is_active } : m))
-    )
+  // Cargar modelos desde el Backend
+  const fetchModels = async () => {
+    setIsLoading(true)
+    try {
+      const data = await getModels()
+      setModels(data)
+    } catch (error) {
+      console.error("Error fetching models:", error)
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const toggleEmbeddingModel = (id: string) => {
-    setEmbeddingModels((models) =>
-      models.map((m) => (m.id === id ? { ...m, is_active: !m.is_active } : m))
-    )
+  useEffect(() => {
+    fetchModels()
+  }, [])
+
+  // Actualizar el estado en la base de datos cuando se apaga/prende un switch
+  const handleToggleModel = async (model: AIModel) => {
+    try {
+      const updatedModel = await updateModel(model.id, { is_active: !model.is_active })
+      setModels((prev) => prev.map((m) => (m.id === model.id ? updatedModel : m)))
+    } catch (error) {
+      alert("Error al actualizar el estado del modelo.")
+    }
+  }
+
+  // Función para pedirle al backend que descargue la lista fresca de Groq
+  const handleSyncModels = async () => {
+    setIsSyncing(true)
+    try {
+      // Nota: Debes crear este endpoint `POST /admin/models/sync` en tu backend y en lib/api.ts
+      await fetch(`${process.env.NEXT_PUBLIC_CORE_API_URL}/api/v1/admin/models/sync`, { method: "POST" })
+      await fetchModels()
+    } catch (error) {
+      alert("Error sincronizando modelos con Groq.")
+    } finally {
+      setIsSyncing(false)
+    }
+  }
+
+  const llmModels = models.filter((m) => m.type === "llm")
+  const embeddingModels = models.filter((m) => m.type === "embedding")
+
+  if (isLoading) {
+    return <div className="flex items-center justify-center min-h-[50vh]"><Spinner className="w-8 h-8 text-primary" /></div>
   }
 
   return (
@@ -249,35 +125,29 @@ export default function ModelsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">AI Models</h1>
           <p className="text-muted-foreground mt-1">
-            Configure and manage available AI models for users.
+            Manage models available to your tenants.
           </p>
         </div>
-        <AddModelDialog />
+        <Button onClick={handleSyncModels} disabled={isSyncing} className="gap-2" variant="outline">
+          <RefreshCw className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`} />
+          {isSyncing ? "Syncing with Groq..." : "Sync Models from API"}
+        </Button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4">
-            <div className="text-2xl font-semibold">
-              {llmModels.length + embeddingModels.length}
-            </div>
-            <p className="text-sm text-muted-foreground">Total Models</p>
+            <div className="text-2xl font-semibold">{models.length}</div>
+            <p className="text-sm text-muted-foreground">Total Models in DB</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4">
             <div className="text-2xl font-semibold text-green-600">
-              {llmModels.filter((m) => m.is_active).length +
-                embeddingModels.filter((m) => m.is_active).length}
+              {models.filter((m) => m.is_active).length}
             </div>
             <p className="text-sm text-muted-foreground">Active Models</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4">
-            <div className="text-2xl font-semibold text-primary">4</div>
-            <p className="text-sm text-muted-foreground">Providers</p>
           </CardContent>
         </Card>
       </div>
@@ -296,34 +166,26 @@ export default function ModelsPage() {
         </TabsList>
 
         <TabsContent value="llm" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Language Models</CardTitle>
-              <CardDescription>
-                Configure LLM models available for chat and text generation.
-              </CardDescription>
-            </CardHeader>
-          </Card>
           <div className="space-y-4">
-            {llmModels.map((model) => (
-              <ModelCard key={model.id} model={model} onToggle={toggleLLMModel} />
-            ))}
+            {llmModels.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">No LLM models found. Click "Sync Models from API" to fetch from Groq.</div>
+            ) : (
+              llmModels.map((model) => (
+                <ModelCard key={model.id} model={model} onToggle={handleToggleModel} />
+              ))
+            )}
           </div>
         </TabsContent>
 
         <TabsContent value="embedding" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Embedding Models</CardTitle>
-              <CardDescription>
-                Configure embedding models for semantic search and RAG.
-              </CardDescription>
-            </CardHeader>
-          </Card>
           <div className="space-y-4">
-            {embeddingModels.map((model) => (
-              <ModelCard key={model.id} model={model} onToggle={toggleEmbeddingModel} />
-            ))}
+            {embeddingModels.length === 0 ? (
+               <div className="text-center py-8 text-muted-foreground border border-dashed rounded-lg">No Embedding models found in DB.</div>
+            ) : (
+              embeddingModels.map((model) => (
+                <ModelCard key={model.id} model={model} onToggle={handleToggleModel} />
+              ))
+            )}
           </div>
         </TabsContent>
       </Tabs>

@@ -27,3 +27,20 @@ class GlobalSettingsUpdate(BaseModel):
     default_system_prompt: str
     groq_api_key: str | None = None
     maintenance_mode: bool
+
+class AIModelBase(BaseModel):
+    id: str
+    name: str
+    provider: str
+    type: str
+    is_active: bool
+    description: str | None = None
+    context_window: int | None = None
+    dimensions: int | None = None
+
+class AIModelResponse(AIModelBase):
+    class Config:
+        from_attributes = True
+
+class AIModelUpdate(BaseModel):
+    is_active: bool

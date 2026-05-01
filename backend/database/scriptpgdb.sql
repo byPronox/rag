@@ -1,17 +1,55 @@
 -- 1. Habilitar la extensión de IA (Vectores)
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- 2. Borrar tablas existentes (para limpiar el esquema y evitar errores)
--- El CASCADE borra automáticamente todo lo que dependa de ellas
+-- 2. Borrar tablas existentes en orden inverso a sus dependencias
 DROP TABLE IF EXISTS product_embeddings CASCADE;
 DROP TABLE IF EXISTS chat_history CASCADE;
 DROP TABLE IF EXISTS search_history CASCADE;
 DROP TABLE IF EXISTS user_configs CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
+DROP TABLE IF EXISTS global_settings CASCADE;
+DROP TABLE IF EXISTS ai_models CASCADE;
 
 -- ==========================================
--- 3. CREACIÓN DE TABLAS CON SUS RELACIONES
+-- 3. CREACIÓN DE TABLAS MAESTRAS (Sin dependencias)
 -- ==========================================
+
+-- NUEVA TABLA: Catálogo de Modelos IA
+CREATE TABLE ai_models (
+    id VARCHAR(100) PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    provider VARCHAR(50) DEFAULT 'Groq',
+    type VARCHAR(20) DEFAULT 'llm',
+    is_active BOOLEAN DEFAULT false,
+    description TEXT,
+    context_window INTEGER,
+    dimensions INTEGER,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO ai_models (id, name, provider, type, is_active, description, dimensions) 
+VALUES ('all-MiniLM-L6-v2', 'all-MiniLM-L6-v2', 'Sentence Transformers', 'embedding', true, 'Local embedding model', 384)
+ON CONFLICT (id) DO NOTHING;
+
+INSERT INTO ai_models (id, name, provider, type, is_active, description) 
+VALUES ('llama3-8b-8192', 'Llama 3 8B', 'Groq', 'llm', true, 'Fast inference LLM model')
+ON CONFLICT (id) DO NOTHING;
+
+CREATE TABLE global_settings (
+    id INTEGER PRIMARY KEY DEFAULT 1,
+    default_llm_model VARCHAR(100) REFERENCES ai_models(id), -- ¡Ahora es relacional!
+    default_embedding_model VARCHAR(100) REFERENCES ai_models(id), -- ¡Ahora es relacional!
+    default_welcome_message TEXT DEFAULT 'Hello! How can I help you today?',
+    default_system_prompt TEXT DEFAULT 'You are an expert sales assistant...',
+    groq_api_key VARCHAR(255),
+    maintenance_mode BOOLEAN DEFAULT FALSE,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT single_row CHECK (id = 1) 
+);
+
+INSERT INTO global_settings (id, default_llm_model, default_embedding_model) 
+VALUES (1, 'llama3-8b-8192', 'all-MiniLM-L6-v2') 
+ON CONFLICT DO NOTHING;
 
 -- Tabla Padre: Usuarios
 CREATE TABLE users (
@@ -22,19 +60,23 @@ CREATE TABLE users (
     is_active BOOLEAN DEFAULT TRUE
 );
 
--- Tabla Hija: Configuración (1 a 1 con Usuarios)
+-- ==========================================
+-- 4. CREACIÓN DE TABLAS HIJAS (Con dependencias)
+-- ==========================================
+
+-- Tabla Hija: Configuración (1 a 1 con Usuarios y relacionada a los modelos)
 CREATE TABLE user_configs (
     id SERIAL PRIMARY KEY,
     user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     system_api_key VARCHAR(255) UNIQUE,
-    selected_embedding_model VARCHAR(50) DEFAULT 'all-MiniLM-L6-v2',
-    selected_llm_model VARCHAR(50) DEFAULT 'llama3-8b-8192',
+    selected_embedding_model VARCHAR(100) DEFAULT 'all-MiniLM-L6-v2' REFERENCES ai_models(id) ON DELETE SET DEFAULT,
+    selected_llm_model VARCHAR(100) DEFAULT 'llama3-8b-8192' REFERENCES ai_models(id) ON DELETE SET DEFAULT,
     welcome_message TEXT DEFAULT 'Hello! How can I help you today?',
-    system_prompt TEXT DEFAULT 'You are an expert sales assistant. Use only the provided context to recommend products. Always suggest the accessories listed in the context to increase cross-selling. If the product is not in the context, politely say you don''t have it.',
+    system_prompt TEXT DEFAULT 'You are an expert sales assistant...',
     is_active BOOLEAN DEFAULT TRUE
 );
 
--- Tabla Hija: Vectores de Productos (Depende de user_configs)
+-- (Las tablas de product_embeddings, search_history y chat_history se quedan exactamente iguales a las tuyas)
 CREATE TABLE product_embeddings (
     variant_id INTEGER,
     user_id INTEGER REFERENCES user_configs(id) ON DELETE CASCADE,
@@ -56,11 +98,9 @@ CREATE TABLE product_embeddings (
     accessories TEXT,
     alternatives TEXT,
     embedding vector(384),
-    -- Llave primaria compuesta: Un producto específico pertenece a un usuario específico
     PRIMARY KEY (variant_id, user_id)
 );
 
--- Tabla Hija: Historial de Búsquedas (Depende de users)
 CREATE TABLE search_history (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -68,7 +108,6 @@ CREATE TABLE search_history (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Tabla Hija: Historial de Chat (Depende de users)
 CREATE TABLE chat_history (
     id SERIAL PRIMARY KEY,
     session_id VARCHAR(100),
@@ -77,19 +116,3 @@ CREATE TABLE chat_history (
     message TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
-
-CREATE TABLE global_settings (
-    id INTEGER PRIMARY KEY DEFAULT 1, -- Siempre será el ID 1
-    default_llm_model VARCHAR(50) DEFAULT 'llama3-8b-8192',
-    default_embedding_model VARCHAR(50) DEFAULT 'all-MiniLM-L6-v2',
-    default_welcome_message TEXT DEFAULT 'Hello! How can I help you today?',
-    default_system_prompt TEXT DEFAULT 'You are an expert sales assistant...',
-    groq_api_key VARCHAR(255),
-    maintenance_mode BOOLEAN DEFAULT FALSE,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    -- Asegurarnos de que solo exista una fila en esta tabla
-    CONSTRAINT single_row CHECK (id = 1) 
-);
-
--- 2. Insertar la fila inicial por defecto
-INSERT INTO global_settings (id) VALUES (1) ON CONFLICT DO NOTHING;
