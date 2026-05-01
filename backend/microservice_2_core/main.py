@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database.connection import init_db
 from config.settings import settings
-from api.routes import auth_routes, api_keys, user_routes
+from api.routes import auth_routes, api_keys, admin_routes
 import logging
 
 logger = logging.getLogger(__name__)
