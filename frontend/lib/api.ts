@@ -174,6 +174,11 @@ export async function updateModel(modelId: string, data: Partial<AIModel>): Prom
   return apiPut<AIModel>(`${ADMIN_ENDPOINTS.models}/${modelId}`, data as Record<string, unknown>)
 }
 
+export async function syncModels(): Promise<{ message: string }> {
+  // Usamos apiPost que ya maneja las cookies, y concatenamos /sync a tu endpoint de modelos
+  return apiPost<{ message: string }>(`${ADMIN_ENDPOINTS.models}/sync`, {})
+}
+
 // Metrics
 export interface AdminMetrics {
   totalUsers: number
