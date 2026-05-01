@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from database.connection import get_db
-from models.schema import GlobalSetting 
+from models.schema import User, UserConfig, GlobalSetting
 from security.jwt_handler import get_current_admin
 from schemas.pydantic_models import GlobalSettingsUpdate, UserCreate
 
