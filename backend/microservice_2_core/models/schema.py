@@ -62,10 +62,12 @@ class SearchHistory(Base):
 class ChatHistory(Base):
     __tablename__ = "chat_history"
     id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(String(100), index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    session_id = Column(String(100))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     role = Column(String(20))
     message = Column(Text)
+    tokens_used = Column(Integer, default=0)
+    latency_ms = Column(Integer, default=0)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class GlobalSetting(Base):

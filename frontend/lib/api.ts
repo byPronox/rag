@@ -179,17 +179,33 @@ export async function syncModels(): Promise<{ message: string }> {
   return apiPost<{ message: string }>(`${ADMIN_ENDPOINTS.models}/sync`, {})
 }
 
-// Metrics
-export interface AdminMetrics {
-  totalUsers: number
-  activeUsers: number
-  totalQueries: number
-  totalTokens: number
-  avgResponseTime: number
+// ==========================================
+// ADMIN METRICS (Datos Reales)
+// ==========================================
+
+export interface TopQuery {
+  query: string
+  hits: number
+  relevance: number
 }
 
-export async function getAdminMetrics(): Promise<AdminMetrics> {
-  return apiGet<AdminMetrics>(ADMIN_ENDPOINTS.metrics)
+export interface UserActivity {
+  email: string
+  queries: number
+  tokens: number
+}
+
+export interface SystemMetrics {
+  total_rag_queries: number
+  total_search_queries: number
+  total_tokens: number
+  avg_latency_sec: number
+  top_queries: TopQuery[]
+  user_activity: UserActivity[]
+}
+
+export async function getSystemMetrics(): Promise<SystemMetrics> {
+  return apiGet<SystemMetrics>(ADMIN_ENDPOINTS.metrics)
 }
 
 // ==========================================

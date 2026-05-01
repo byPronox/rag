@@ -1,8 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from database.connection import get_db
-from models.schema import User, UserConfig, GlobalSetting, AIModel
+from models.schema import User, UserConfig, GlobalSetting, AIModel, SearchHistory, ChatHistory
 from security.jwt_handler import get_password_hash
 from api.deps import get_current_admin, get_current_user
 from schemas.pydantic_models import GlobalSettingsUpdate, UserCreate, ApiKeyResponse, AIModelResponse, AIModelUpdate
@@ -204,3 +205,45 @@ def sync_models_with_groq(admin: User = Depends(get_current_admin), db: Session 
 
     db.commit()
     return {"message": f"Sincronización exitosa. Se detectaron y guardaron {models_added} modelos nuevos."}
+
+
+@router.get("/metrics")
+def get_dashboard_metrics(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    # 1. Totales Generales
+    total_rag_queries = db.query(ChatHistory).filter(ChatHistory.role == "user").count()
+    total_searches = db.query(SearchHistory).count()
+    total_tokens = db.query(func.sum(ChatHistory.tokens_used)).scalar() or 0
+    avg_latency = db.query(func.avg(ChatHistory.latency_ms)).scalar() or 0
+
+    # 2. Top Búsquedas (Agrupamos por el texto de búsqueda y contamos)
+    top_searches_query = db.query(
+        SearchHistory.query_text, 
+        func.count(SearchHistory.id).label('hits')
+    ).group_by(SearchHistory.query_text).order_by(desc('hits')).limit(5).all()
+    
+    top_queries = [
+        # Simulamos un 'relevance' aleatorio o fijo por ahora, ya que requeriría lógica extra
+        {"query": q[0], "hits": q[1], "relevance": 95} for q in top_searches_query
+    ]
+
+    # 3. Actividad de Usuarios (Quién pregunta más)
+    user_activity_query = db.query(
+        User.email,
+        func.count(ChatHistory.id).label('queries'),
+        func.sum(ChatHistory.tokens_used).label('tokens')
+    ).join(ChatHistory, User.id == ChatHistory.user_id)\
+     .filter(ChatHistory.role == "user")\
+     .group_by(User.email).order_by(desc('queries')).limit(5).all()
+
+    user_activity = [
+        {"email": u[0], "queries": u[1], "tokens": u[2] or 0} for u in user_activity_query
+    ]
+
+    return {
+        "total_rag_queries": total_rag_queries,
+        "total_search_queries": total_searches,
+        "total_tokens": total_tokens,
+        "avg_latency_sec": round(avg_latency / 1000, 2), # Convertimos ms a segundos
+        "top_queries": top_queries,
+        "user_activity": user_activity
+    }
