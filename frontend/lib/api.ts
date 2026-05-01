@@ -44,17 +44,11 @@ export function getAuthHeaders(token: string): HeadersInit {
 }
 
 // API helper functions
-export async function apiPost<T>(url: string, data: Record<string, unknown>, token?: string): Promise<T> {
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-  }
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`
-  }
-
+export async function apiPost<T>(url: string, data: Record<string, unknown>): Promise<T> {
   const response = await fetch(url, {
     method: "POST",
-    headers,
+    headers: { "Content-Type": "application/json" },
+    credentials: "include", // <--- ESTO ENVÍA LA COOKIE AUTOMÁTICAMENTE
     body: JSON.stringify(data),
   })
 
@@ -62,26 +56,20 @@ export async function apiPost<T>(url: string, data: Record<string, unknown>, tok
     const error = await response.json().catch(() => ({ detail: "Error de conexión" }))
     throw new Error(error.detail || "Error en la solicitud")
   }
-
   return response.json()
 }
 
-export async function apiGet<T>(url: string, token?: string): Promise<T> {
-  const headers: HeadersInit = {}
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`
-  }
-
+export async function apiGet<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     method: "GET",
-    headers,
+    headers: { "Content-Type": "application/json" },
+    credentials: "include", // <--- ESTO ENVÍA LA COOKIE AUTOMÁTICAMENTE
   })
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: "Error de conexión" }))
     throw new Error(error.detail || "Error en la solicitud")
   }
-
   return response.json()
 }
 
@@ -142,8 +130,7 @@ export async function apiPostFormData<T>(url: string, formData: FormData): Promi
 
 // Auth functions
 export interface LoginResponse {
-  access_token: string
-  token_type: string
+  message: string
   user: User
 }
 
@@ -156,8 +143,18 @@ export async function login(email: string, password: string): Promise<LoginRespo
   formData.append("username", email)
   formData.append("password", password)
   
-  // Automáticamente usará CORE_API_URL
-  return apiPostFormData<LoginResponse>(AUTH_ENDPOINTS.login, formData)
+  const response = await fetch(AUTH_ENDPOINTS.login, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: "Error de conexión" }))
+    throw new Error(error.detail || "Error en la solicitud")
+  }
+
+  return response.json()
 }
 
 export async function register(email: string, password: string): Promise<RegisterResponse> {

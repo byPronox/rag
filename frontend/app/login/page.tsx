@@ -24,7 +24,10 @@ export default function LoginPage() {
 
     try {
       const response = await apiLogin(email, password)
-      login(response.access_token, response.user)
+      
+      // CAMBIO AQUÍ: Ahora solo le pasamos el usuario al contexto
+      // El token ya está guardado de forma segura en la cookie por el navegador
+      login(response.user) 
       
       // Redirect based on user role
       if (response.user.role === "admin") {
