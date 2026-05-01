@@ -35,20 +35,15 @@ export const RAG_ENDPOINTS = {
   chat: `${RAG_API_URL}/api/v1/chat/`,
 }
 
-// Get auth headers helper
-export function getAuthHeaders(token: string): HeadersInit {
-  return {
-    "Authorization": `Bearer ${token}`,
-    "Content-Type": "application/json",
-  }
-}
+// ==========================================
+// API HELPER FUNCTIONS (Con Cookies Habilitadas)
+// ==========================================
 
-// API helper functions
 export async function apiPost<T>(url: string, data: Record<string, unknown>): Promise<T> {
   const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    credentials: "include", // <--- ESTO ENVÍA LA COOKIE AUTOMÁTICAMENTE
+    credentials: "include",
     body: JSON.stringify(data),
   })
 
@@ -63,7 +58,7 @@ export async function apiGet<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
-    credentials: "include", // <--- ESTO ENVÍA LA COOKIE AUTOMÁTICAMENTE
+    credentials: "include",
   })
 
   if (!response.ok) {
@@ -73,17 +68,11 @@ export async function apiGet<T>(url: string): Promise<T> {
   return response.json()
 }
 
-export async function apiPut<T>(url: string, data: Record<string, unknown>, token?: string): Promise<T> {
-  const headers: HeadersInit = {
-    "Content-Type": "application/json",
-  }
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`
-  }
-
+export async function apiPut<T>(url: string, data: Record<string, unknown>): Promise<T> {
   const response = await fetch(url, {
     method: "PUT",
-    headers,
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify(data),
   })
 
@@ -91,32 +80,27 @@ export async function apiPut<T>(url: string, data: Record<string, unknown>, toke
     const error = await response.json().catch(() => ({ detail: "Error de conexión" }))
     throw new Error(error.detail || "Error en la solicitud")
   }
-
   return response.json()
 }
 
-export async function apiDelete<T>(url: string, token?: string): Promise<T> {
-  const headers: HeadersInit = {}
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`
-  }
-
+export async function apiDelete<T>(url: string): Promise<T> {
   const response = await fetch(url, {
     method: "DELETE",
-    headers,
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
   })
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: "Error de conexión" }))
     throw new Error(error.detail || "Error en la solicitud")
   }
-
   return response.json()
 }
 
 export async function apiPostFormData<T>(url: string, formData: FormData): Promise<T> {
   const response = await fetch(url, {
     method: "POST",
+    credentials: "include",
     body: formData,
   })
 
@@ -124,11 +108,13 @@ export async function apiPostFormData<T>(url: string, formData: FormData): Promi
     const error = await response.json().catch(() => ({ detail: "Error de conexión" }))
     throw new Error(error.detail || "Error en la solicitud")
   }
-
   return response.json()
 }
 
-// Auth functions
+// ==========================================
+// AUTH FUNCTIONS
+// ==========================================
+
 export interface LoginResponse {
   message: string
   user: User
@@ -143,40 +129,31 @@ export async function login(email: string, password: string): Promise<LoginRespo
   formData.append("username", email)
   formData.append("password", password)
   
-  const response = await fetch(AUTH_ENDPOINTS.login, {
-    method: "POST",
-    credentials: "include",
-    body: formData,
-  })
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: "Error de conexión" }))
-    throw new Error(error.detail || "Error en la solicitud")
-  }
-
-  return response.json()
+  return apiPostFormData<LoginResponse>(AUTH_ENDPOINTS.login, formData)
 }
 
 export async function register(email: string, password: string): Promise<RegisterResponse> {
-  // Automáticamente usará CORE_API_URL
   return apiPost<RegisterResponse>(AUTH_ENDPOINTS.register, { email, password })
 }
 
-// Admin API functions
-export async function getUsers(token: string): Promise<User[]> {
-  return apiGet<User[]>(ADMIN_ENDPOINTS.users, token)
+// ==========================================
+// ADMIN API FUNCTIONS
+// ==========================================
+
+export async function getUsers(): Promise<User[]> {
+  return apiGet<User[]>(ADMIN_ENDPOINTS.users)
 }
 
-export async function createUser(token: string, userData: { email: string; password: string; role: string }): Promise<User> {
-  return apiPost<User>(ADMIN_ENDPOINTS.users, userData, token)
+export async function createUser(userData: { email: string; password: string; role: string }): Promise<User> {
+  return apiPost<User>(ADMIN_ENDPOINTS.users, userData)
 }
 
-export async function updateUser(token: string, userId: number, userData: Partial<User>): Promise<User> {
-  return apiPut<User>(`${ADMIN_ENDPOINTS.users}/${userId}`, userData as Record<string, unknown>, token)
+export async function updateUser(userId: number, userData: Partial<User>): Promise<User> {
+  return apiPut<User>(`${ADMIN_ENDPOINTS.users}/${userId}`, userData as Record<string, unknown>)
 }
 
-export async function deleteUser(token: string, userId: number): Promise<{ message: string }> {
-  return apiDelete<{ message: string }>(`${ADMIN_ENDPOINTS.users}/${userId}`, token)
+export async function deleteUser(userId: number): Promise<{ message: string }> {
+  return apiDelete<{ message: string }>(`${ADMIN_ENDPOINTS.users}/${userId}`)
 }
 
 // Models
@@ -188,12 +165,12 @@ export interface AIModel {
   is_active: boolean
 }
 
-export async function getModels(token: string): Promise<AIModel[]> {
-  return apiGet<AIModel[]>(ADMIN_ENDPOINTS.models, token)
+export async function getModels(): Promise<AIModel[]> {
+  return apiGet<AIModel[]>(ADMIN_ENDPOINTS.models)
 }
 
-export async function updateModel(token: string, modelId: string, data: Partial<AIModel>): Promise<AIModel> {
-  return apiPut<AIModel>(`${ADMIN_ENDPOINTS.models}/${modelId}`, data as Record<string, unknown>, token)
+export async function updateModel(modelId: string, data: Partial<AIModel>): Promise<AIModel> {
+  return apiPut<AIModel>(`${ADMIN_ENDPOINTS.models}/${modelId}`, data as Record<string, unknown>)
 }
 
 // Metrics
@@ -205,11 +182,14 @@ export interface AdminMetrics {
   avgResponseTime: number
 }
 
-export async function getAdminMetrics(token: string): Promise<AdminMetrics> {
-  return apiGet<AdminMetrics>(ADMIN_ENDPOINTS.metrics, token)
+export async function getAdminMetrics(): Promise<AdminMetrics> {
+  return apiGet<AdminMetrics>(ADMIN_ENDPOINTS.metrics)
 }
 
-// User-specific functions
+// ==========================================
+// USER-SPECIFIC FUNCTIONS
+// ==========================================
+
 export interface UserConfig {
   id: number
   user_id: number
@@ -221,12 +201,12 @@ export interface UserConfig {
   is_active: boolean
 }
 
-export async function getUserConfig(token: string): Promise<UserConfig> {
-  return apiGet<UserConfig>(USER_ENDPOINTS.config, token)
+export async function getUserConfig(): Promise<UserConfig> {
+  return apiGet<UserConfig>(USER_ENDPOINTS.config)
 }
 
-export async function updateUserConfig(token: string, config: Partial<UserConfig>): Promise<UserConfig> {
-  return apiPut<UserConfig>(USER_ENDPOINTS.config, config as Record<string, unknown>, token)
+export async function updateUserConfig(config: Partial<UserConfig>): Promise<UserConfig> {
+  return apiPut<UserConfig>(USER_ENDPOINTS.config, config as Record<string, unknown>)
 }
 
 export interface ChatMessage {
@@ -237,8 +217,8 @@ export interface ChatMessage {
   created_at: string
 }
 
-export async function getChatHistory(token: string): Promise<ChatMessage[]> {
-  return apiGet<ChatMessage[]>(USER_ENDPOINTS.chatHistory, token)
+export async function getChatHistory(): Promise<ChatMessage[]> {
+  return apiGet<ChatMessage[]>(USER_ENDPOINTS.chatHistory)
 }
 
 export interface SearchQuery {
@@ -247,6 +227,6 @@ export interface SearchQuery {
   created_at: string
 }
 
-export async function getSearchHistory(token: string): Promise<SearchQuery[]> {
-  return apiGet<SearchQuery[]>(USER_ENDPOINTS.searchHistory, token)
+export async function getSearchHistory(): Promise<SearchQuery[]> {
+  return apiGet<SearchQuery[]>(USER_ENDPOINTS.searchHistory)
 }
