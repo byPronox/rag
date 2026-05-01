@@ -19,10 +19,10 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), 
     response.set_cookie(
         key="access_token", 
         value=f"Bearer {access_token}", 
-        httponly=True,
-        samesite="lax",
-        secure=False,
-        max_age=86400
+        httponly=True,   
+        samesite="none",
+        secure=True,
+        max_age=86400 * 7
     )
     
     return {
