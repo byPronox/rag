@@ -10,9 +10,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
-    role = Column(String(20), default="admin") 
+    role = Column(String(20), default="user") 
     is_active = Column(Boolean, default=True)
-    
     config = relationship("UserConfig", back_populates="user", uselist=False)
 
 class UserConfig(Base):

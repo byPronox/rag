@@ -4,7 +4,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from database.connection import get_db
 from models.schema import User, UserConfig
 from schemas.pydantic_models import UserCreate, UserLoginResponse
-from security.jwt_handler import get_password_hash, verify_password, create_access_token
+from security.jwt_handler import get_password_hash, verify_password, create_access_token, get_current_user
 
 router = APIRouter()
 
