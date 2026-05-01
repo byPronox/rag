@@ -99,17 +99,19 @@ def create_user_by_admin(user_data: UserCreate, admin: User = Depends(get_curren
 
 @router.delete("/users/{user_id}")
 def delete_user(user_id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    """Deletes a user."""
     if admin.id == user_id:
-         raise HTTPException(status_code=400, detail="You cannot delete yourself.")
+         raise HTTPException(status_code=400, detail="No puedes eliminarte a ti mismo.")
          
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
-        raise HTTPException(status_code=404, detail="User not found.")
+        raise HTTPException(status_code=404, detail="Usuario no encontrado.")
         
+    db.query(UserConfig).filter(UserConfig.user_id == user_id).delete(synchronize_session=False)
+
     db.delete(user)
     db.commit()
-    return {"message": "User deleted"}
+    
+    return {"message": "Usuario y todos sus datos eliminados correctamente"}
 
 @router.post("/users/{user_id}/api-key", response_model=ApiKeyResponse)
 def regenerate_user_api_key(user_id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
