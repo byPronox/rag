@@ -19,10 +19,16 @@ import {
   Users,
   Calendar,
 } from "lucide-react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { getSystemMetrics, SystemMetrics } from "@/lib/api"
+import { Spinner } from "@/components/ui/spinner"
 
-// Simple bar chart component
+// Simple bar chart component (Actualizado para manejar datos vacíos)
 function BarChart({ data, maxValue }: { data: { label: string; value: number }[]; maxValue: number }) {
+  if (!data || data.length === 0) {
+    return <div className="flex items-center justify-center h-48 text-sm text-muted-foreground border border-dashed rounded-md">No historical data available yet</div>
+  }
+
   return (
     <div className="flex items-end justify-between gap-2 h-48">
       {data.map((item, index) => (
@@ -38,7 +44,7 @@ function BarChart({ data, maxValue }: { data: { label: string; value: number }[]
   )
 }
 
-// Simple line visualization
+// Simple line visualization (Mantenemos el estilo visual como placeholder del gráfico)
 function TrendLine() {
   return (
     <div className="h-32 relative">
@@ -48,12 +54,12 @@ function TrendLine() {
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
-          className="text-primary"
+          className="text-primary opacity-20" /* Bajamos la opacidad hasta tener datos reales en el futuro */
         />
         <path
           d="M0,80 L50,70 L100,75 L150,50 L200,40 L250,45 L300,20 L350,30 L400,10 L400,100 L0,100 Z"
           fill="url(#gradient)"
-          opacity="0.1"
+          opacity="0.05"
         />
         <defs>
           <linearGradient id="gradient" x1="0%" y1="0%" x2="0%" y2="100%">
@@ -68,31 +74,47 @@ function TrendLine() {
 
 export default function MetricsPage() {
   const [timeRange, setTimeRange] = useState("7d")
+  const [isLoading, setIsLoading] = useState(true)
+  const [metrics, setMetrics] = useState<SystemMetrics>({
+    total_rag_queries: 0,
+    total_search_queries: 0,
+    total_tokens: 0,
+    avg_latency_sec: 0,
+    top_queries: [],
+    user_activity: []
+  })
 
-  const weeklyData = [
-    { label: "Mon", value: 120 },
-    { label: "Tue", value: 180 },
-    { label: "Wed", value: 250 },
-    { label: "Thu", value: 200 },
-    { label: "Fri", value: 280 },
-    { label: "Sat", value: 150 },
-    { label: "Sun", value: 100 },
-  ]
+  useEffect(() => {
+    const fetchMetrics = async () => {
+      setIsLoading(true)
+      try {
+        const data = await getSystemMetrics()
+        if (data) {
+          setMetrics(data)
+        }
+      } catch (error) {
+        console.error("Error fetching metrics:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchMetrics()
+  }, [timeRange])
 
-  const topQueries = [
-    { query: "minimalist desk", hits: 1240, relevance: 98 },
-    { query: "ergonomic chair", hits: 980, relevance: 95 },
-    { query: "led desk lamp", hits: 756, relevance: 92 },
-    { query: "wireless keyboard", hits: 543, relevance: 88 },
-    { query: "monitor stand", hits: 421, relevance: 85 },
-  ]
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <Spinner className="w-8 h-8 text-primary" />
+      </div>
+    )
+  }
 
-  const userActivity = [
-    { email: "empresa1@example.com", queries: 145, tokens: 52000 },
-    { email: "empresa2@example.com", queries: 89, tokens: 31000 },
-    { email: "empresa3@example.com", queries: 67, tokens: 24000 },
-    { email: "empresa4@example.com", queries: 45, tokens: 16000 },
-  ]
+  // Helper para formatear tokens grandes (Ej: 1500 -> 1.5K, 2000000 -> 2.0M)
+  const formatTokens = (tokens: number) => {
+    if (tokens >= 1000000) return (tokens / 1000000).toFixed(1) + "M"
+    if (tokens >= 1000) return (tokens / 1000).toFixed(1) + "K"
+    return tokens.toString()
+  }
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -101,7 +123,7 @@ export default function MetricsPage() {
         <div>
           <h1 className="text-2xl font-semibold text-foreground">System Metrics</h1>
           <p className="text-muted-foreground mt-1">
-            Monitor system performance and usage analytics.
+            Monitor system performance and usage analytics directly from the database.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -124,7 +146,7 @@ export default function MetricsPage() {
         </div>
       </div>
 
-      {/* Key Metrics */}
+      {/* Key Metrics - REAL DATA */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-6">
@@ -132,10 +154,9 @@ export default function MetricsPage() {
               <span className="text-sm text-muted-foreground">Total RAG Queries</span>
               <MessageSquare className="h-5 w-5 text-primary" />
             </div>
-            <div className="text-3xl font-semibold">12,458</div>
-            <div className="flex items-center gap-1 mt-2 text-xs text-green-600">
-              <TrendingUp className="h-4 w-4" />
-              +8.4% from last period
+            <div className="text-3xl font-semibold">{metrics.total_rag_queries.toLocaleString()}</div>
+            <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+              Total queries in database
             </div>
           </CardContent>
         </Card>
@@ -146,10 +167,9 @@ export default function MetricsPage() {
               <span className="text-sm text-muted-foreground">Search Queries</span>
               <Search className="h-5 w-5 text-primary" />
             </div>
-            <div className="text-3xl font-semibold">5,234</div>
-            <div className="flex items-center gap-1 mt-2 text-xs text-green-600">
-              <TrendingUp className="h-4 w-4" />
-              +12.1% from last period
+            <div className="text-3xl font-semibold">{metrics.total_search_queries.toLocaleString()}</div>
+            <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+              Total semantic searches
             </div>
           </CardContent>
         </Card>
@@ -160,9 +180,9 @@ export default function MetricsPage() {
               <span className="text-sm text-muted-foreground">Token Usage</span>
               <Cpu className="h-5 w-5 text-primary" />
             </div>
-            <div className="text-3xl font-semibold">2.1M</div>
+            <div className="text-3xl font-semibold">{formatTokens(metrics.total_tokens)}</div>
             <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
-              12% of monthly cap
+              Aggregated across all tenants
             </div>
           </CardContent>
         </Card>
@@ -173,10 +193,9 @@ export default function MetricsPage() {
               <span className="text-sm text-muted-foreground">Avg Response Time</span>
               <Clock className="h-5 w-5 text-primary" />
             </div>
-            <div className="text-3xl font-semibold">1.2s</div>
-            <div className="flex items-center gap-1 mt-2 text-xs text-green-600">
-              <TrendingUp className="h-4 w-4" />
-              -0.3s improvement
+            <div className="text-3xl font-semibold">{metrics.avg_latency_sec}s</div>
+            <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+              Calculated from Groq inferences
             </div>
           </CardContent>
         </Card>
@@ -187,10 +206,11 @@ export default function MetricsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Chat Activity</CardTitle>
-            <CardDescription>RAG queries over the selected period</CardDescription>
+            <CardDescription>RAG queries history (Awaiting timeline endpoint)</CardDescription>
           </CardHeader>
           <CardContent>
-            <BarChart data={weeklyData} maxValue={300} />
+            {/* Pasamos un array vacío para que NO haya datos falsos */}
+            <BarChart data={[]} maxValue={300} />
           </CardContent>
         </Card>
 
@@ -201,7 +221,7 @@ export default function MetricsPage() {
           </CardHeader>
           <CardContent>
             <TrendLine />
-            <div className="flex justify-between mt-4 text-[10px] text-muted-foreground uppercase">
+            <div className="flex justify-between mt-4 text-[10px] text-muted-foreground uppercase opacity-50">
               <span>Mon</span>
               <span>Tue</span>
               <span>Wed</span>
@@ -214,43 +234,49 @@ export default function MetricsPage() {
         </Card>
       </div>
 
-      {/* Tables Row */}
+      {/* Tables Row - REAL DATA */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Top Search Queries */}
         <Card>
           <CardHeader>
             <CardTitle>Top Search Queries</CardTitle>
-            <CardDescription>Most popular search terms this period</CardDescription>
+            <CardDescription>Most popular search terms in database</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {topQueries.map((item, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
-                      {String(index + 1).padStart(2, "0")}
-                    </div>
-                    <div>
-                      <p className="font-medium text-foreground">{item.query}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.hits.toLocaleString()} hits
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground mb-1">Relevance</p>
-                    <div className="flex items-center gap-2">
-                      <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-primary"
-                          style={{ width: `${item.relevance}%` }}
-                        />
-                      </div>
-                      <span className="text-xs font-mono text-primary">{item.relevance}%</span>
-                    </div>
-                  </div>
+              {metrics.top_queries.length === 0 ? (
+                <div className="text-sm text-center py-6 text-muted-foreground border border-dashed rounded-md">
+                  No search queries recorded yet.
                 </div>
-              ))}
+              ) : (
+                metrics.top_queries.map((item, index) => (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded bg-muted flex items-center justify-center text-xs font-bold text-muted-foreground">
+                        {String(index + 1).padStart(2, "0")}
+                      </div>
+                      <div>
+                        <p className="font-medium text-foreground">{item.query}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {item.hits.toLocaleString()} hits
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted-foreground mb-1">Relevance</p>
+                      <div className="flex items-center gap-2">
+                        <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-primary"
+                            style={{ width: `${item.relevance}%` }}
+                          />
+                        </div>
+                        <span className="text-xs font-mono text-primary">{item.relevance}%</span>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -260,37 +286,43 @@ export default function MetricsPage() {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>User Activity</CardTitle>
-              <CardDescription>Most active users this period</CardDescription>
+              <CardDescription>Tenants with the most interactions</CardDescription>
             </div>
             <Users className="h-5 w-5 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {userActivity.map((user, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
-                >
-                  <div>
-                    <p className="font-medium text-foreground">{user.email}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {user.queries} queries
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-foreground">
-                      {(user.tokens / 1000).toFixed(0)}K
-                    </p>
-                    <p className="text-xs text-muted-foreground">tokens</p>
-                  </div>
+              {metrics.user_activity.length === 0 ? (
+                <div className="text-sm text-center py-6 text-muted-foreground border border-dashed rounded-md">
+                  No user activity recorded yet.
                 </div>
-              ))}
+              ) : (
+                metrics.user_activity.map((user, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-3 rounded-lg bg-muted/50"
+                  >
+                    <div>
+                      <p className="font-medium text-foreground">{user.email}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {user.queries.toLocaleString()} queries
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-foreground">
+                        {formatTokens(user.tokens)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">tokens</p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* System Health */}
+      {/* System Health (Static visually, waiting for real infrastructure endpoint in future) */}
       <Card>
         <CardHeader>
           <CardTitle>System Health</CardTitle>
@@ -320,10 +352,10 @@ export default function MetricsPage() {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-3 h-3 rounded-full bg-yellow-500" />
+              <div className="w-3 h-3 rounded-full bg-green-500" />
               <div>
                 <p className="text-sm font-medium">LLM Provider</p>
-                <p className="text-xs text-muted-foreground">Minor latency</p>
+                <p className="text-xs text-muted-foreground">Operational</p>
               </div>
             </div>
           </div>
