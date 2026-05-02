@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
@@ -13,18 +13,17 @@ import {
   LogOut,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
-import { useRouter } from "next/navigation"
 
 const navigation = [
-  { name: "Dashboard", href: "/user", icon: LayoutDashboard },
-  { name: "Productos Exportados", href: "/user/products", icon: PackageSearch },
-  { name: "Configurar Chatbot", href: "/user/chatbot", icon: MessageSquare },
-  { name: "Barra de Búsqueda", href: "/user/search", icon: SearchCode },
-  { name: "Historial", href: "/user/history", icon: History },
+  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Productos Exportados", href: "/dashboard/products", icon: PackageSearch },
+  { name: "Configurar Chatbot", href: "/dashboard/chatbot", icon: MessageSquare },
+  { name: "Barra de Búsqueda", href: "/dashboard/search", icon: SearchCode },
+  { name: "Historial", href: "/dashboard/history", icon: History },
 ]
 
 const secondaryNavigation = [
-  { name: "Settings", href: "/user/settings", icon: Settings },
+  { name: "Settings", href: "/dashboard/settings", icon: Settings },
 ]
 
 export function UserSidebar() {
@@ -54,7 +53,8 @@ export function UserSidebar() {
         {/* Navigation */}
         <nav className="flex-1 px-3 space-y-1">
           {navigation.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/user" && pathname.startsWith(item.href))
+            // Actualizado para que no se marque activo en todo momento si estás en subrutas de dashboard
+            const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
             return (
               <Link
                 key={item.name}
