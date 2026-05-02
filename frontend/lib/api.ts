@@ -25,6 +25,7 @@ export const ADMIN_ENDPOINTS = {
 // User endpoints -> Usan el Core API (Microservicio 2)
 export const USER_ENDPOINTS = {
   config: `${CORE_API_URL}/api/v1/user/config`,
+  models: `${CORE_API_URL}/api/v1/user/models`,
   metrics: `${CORE_API_URL}/api/v1/user/metrics`,
   chatHistory: `${CORE_API_URL}/api/v1/user/chat-history`,
   searchHistory: `${CORE_API_URL}/api/v1/user/search-history`,
@@ -166,8 +167,9 @@ export interface AIModel {
   is_active: boolean
 }
 
-export async function getModels(): Promise<AIModel[]> {
-  return apiGet<AIModel[]>(ADMIN_ENDPOINTS.models)
+export async function getModels(isAdmin = false): Promise<AIModel[]> {
+  const url = isAdmin ? ADMIN_ENDPOINTS.models : USER_ENDPOINTS.models;
+  return apiGet<AIModel[]>(url);
 }
 
 export async function updateModel(modelId: string, data: Partial<AIModel>): Promise<AIModel> {

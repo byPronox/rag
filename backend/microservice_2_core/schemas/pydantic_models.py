@@ -1,3 +1,4 @@
+from typing import Optional 
 from pydantic import BaseModel, EmailStr
 
 class UserCreate(BaseModel):
@@ -44,3 +45,10 @@ class AIModelResponse(AIModelBase):
 
 class AIModelUpdate(BaseModel):
     is_active: bool
+
+class UserConfigUpdate(BaseModel):
+    welcome_message: Optional[str] = None
+    system_prompt: Optional[str] = None
+    selected_llm_model: Optional[str] = None
+    theme_color: Optional[str] = None
+    chat_icon: Optional[str] = None

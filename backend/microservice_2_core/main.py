@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from database.connection import init_db, SessionLocal 
 from config.settings import settings
-from api.routes import auth_routes, api_keys, admin_routes
+from api.routes import auth_routes, api_keys, admin_routes, user_routes
 import logging
 from models.schema import User, GlobalSetting
 
@@ -33,6 +33,7 @@ app.add_middleware(
 app.include_router(auth_routes.router, prefix="/api/v1/auth", tags=["Autenticación"])
 app.include_router(api_keys.router, prefix="/api/v1/apikeys", tags=["API Keys"])
 app.include_router(admin_routes.router, prefix="/api/v1/admin", tags=["Admin"])
+app.include_router(user_routes.router, prefix="/api/v1/user", tags=["Tenant User"])
 
 # ==============================================================================
 # FUNCIÓN PARA CREAR EL ADMIN POR DEFECTO
