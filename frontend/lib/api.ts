@@ -167,7 +167,7 @@ export interface AIModel {
   is_active: boolean
 }
 
-export async function getModels(isAdmin = false): Promise<AIModel[]> {
+export async function getModels(isAdmin: boolean = false): Promise<AIModel[]> {
   const url = isAdmin ? ADMIN_ENDPOINTS.models : USER_ENDPOINTS.models;
   return apiGet<AIModel[]>(url);
 }

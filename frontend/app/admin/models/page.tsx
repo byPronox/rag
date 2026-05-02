@@ -74,7 +74,7 @@ export default function ModelsPage() {
   const fetchModels = async () => {
     setIsLoading(true)
     try {
-      const data = await getModels(true) // <--- ¡AÑADE EL true AQUÍ!
+      const data = await getModels(true) 
       setModels(data)
     } catch (error) {
       console.error("Error fetching models:", error)
