@@ -48,17 +48,51 @@ export function ChatWidget() {
     setInputValue("")
     setIsLoading(true)
     
-    // Simulate API call - replace with actual RAG API call
-    setTimeout(() => {
+    try {
+      // 1. Obtenemos la URL de tu Microservicio 3 desde las variables de entorno
+      const RAG_API_URL = process.env.NEXT_PUBLIC_RAG_API_URL || "http://localhost:8001";
+      
+      // 2. Hacemos la petición HTTP Real al Microservicio 3
+      const response = await fetch(`${RAG_API_URL}/api/v1/chat/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          // ¡AQUÍ ESTÁ LA MAGIA! Enviamos la llave de la tienda en el Header
+          "x-api-key": config.system_api_key 
+        },
+        body: JSON.stringify({
+          message: userMessage.content,
+          session_id: "session_" + Date.now() // Idealmente guardas un ID único por visitante
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Error en la respuesta del servidor");
+      }
+
+      const data = await response.json();
+      
+      // 3. Mostramos la respuesta real de Groq
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: `I found some great options based on "${userMessage.content}". Let me show you some products that match your needs. You can also use our semantic search above for more specific results!`,
+        content: data.reply || data.answer || "No response received", // Depende de cómo lo devuelva tu backend
         timestamp: new Date()
       }
       setMessages(prev => [...prev, assistantMessage])
+
+    } catch (error) {
+      console.error("Error calling RAG API:", error);
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "Sorry, I'm having trouble connecting to the server right now.",
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
   }
   
   const handleKeyDown = (e: React.KeyboardEvent) => {
