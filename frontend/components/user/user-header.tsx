@@ -11,7 +11,7 @@ interface UserHeaderProps {
   onMenuClick?: () => void
 }
 
-export function UserHeader({ title = "Panel de Usuario", onMenuClick }: UserHeaderProps) {
+export function UserHeader({ title = "User Dashboard", onMenuClick }: UserHeaderProps) {
   const { user } = useAuth()
 
   const getInitials = (email: string) => {
@@ -38,7 +38,7 @@ export function UserHeader({ title = "Panel de Usuario", onMenuClick }: UserHead
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Buscar productos, chats..."
+            placeholder="Search products, chats..."
             className="pl-9 w-64 bg-muted/50 border-border"
           />
         </div>

@@ -13,7 +13,7 @@ import {
   Download
 } from "lucide-react"
 
-// Metric card component - Exactamente igual al del admin
+// Metric card component
 function MetricCard({
   title,
   value,
@@ -51,7 +51,7 @@ function MetricCard({
               }`}
             >
               {trend === "up" && <TrendingUp className="h-4 w-4" />}
-              {trendValue} {trendLabel}
+              {trendValue} <span className="text-muted-foreground ml-1">{trendLabel}</span>
             </div>
           )}
         </div>
@@ -60,7 +60,7 @@ function MetricCard({
   )
 }
 
-// Activity row component (Reemplaza a UserRow para el panel de usuario)
+// Activity row component
 function ActivityRow({
   type,
   detail,
@@ -77,7 +77,7 @@ function ActivityRow({
       <td className="px-6 py-4">
         <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium border ${
           type === 'Chat' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 
-          type === 'Búsqueda' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : 
+          type === 'Search' ? 'bg-purple-500/10 text-purple-500 border-purple-500/20' : 
           'bg-green-500/10 text-green-500 border-green-500/20'
         }`}>
           {type}
@@ -99,44 +99,44 @@ function ActivityRow({
 export default function UserDashboardPage() {
   const metrics = [
     {
-      title: "Interacciones del Chatbot",
+      title: "Chatbot Interactions",
       value: "1,248",
       icon: MessageSquare,
       trend: "up" as const,
       trendValue: "+14%",
-      trendLabel: "esta semana",
+      trendLabel: "this week",
     },
     {
-      title: "Búsquedas Realizadas",
+      title: "Searches Performed",
       value: "8,392",
       icon: Search,
       trend: "up" as const,
       trendValue: "+22%",
-      trendLabel: "esta semana",
+      trendLabel: "this week",
     },
     {
-      title: "Productos Exportados",
+      title: "Exported Products",
       value: "156",
       icon: Package,
       trend: "up" as const,
       trendValue: "+5%",
-      trendLabel: "este mes",
+      trendLabel: "this month",
     },
     {
-      title: "Precisión de la IA",
+      title: "AI Accuracy",
       value: "96.4%",
       icon: Activity,
       trend: "up" as const,
       trendValue: "+1.2%",
-      trendLabel: "vs semana pasada",
+      trendLabel: "vs last week",
     },
   ]
 
   const recentActivity = [
-    { type: "Chat", detail: "Usuario preguntó por 'Políticas de devolución'", time: "Hace 5 min", status: "Resuelto" },
-    { type: "Búsqueda", detail: "Término: 'Laptops gaming'", time: "Hace 15 min", status: "Completado" },
-    { type: "Sistema", detail: "Script de Chatbot actualizado (Tema: Oscuro)", time: "Hace 2 horas", status: "Desplegado" },
-    { type: "Chat", detail: "Usuario solicitó 'Soporte técnico'", time: "Hace 3 horas", status: "Derivado" },
+    { type: "Chat", detail: "User asked for 'Return policies'", time: "5 min ago", status: "Resolved" },
+    { type: "Search", detail: "Term: 'Gaming laptops'", time: "15 min ago", status: "Completed" },
+    { type: "System", detail: "Chatbot script updated (Dark Theme)", time: "2 hours ago", status: "Deployed" },
+    { type: "Chat", detail: "User requested 'Technical support'", time: "3 hours ago", status: "Escalated" },
   ]
 
   return (
@@ -144,14 +144,14 @@ export default function UserDashboardPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold text-foreground">Panel de Control</h1>
+          <h1 className="text-2xl font-semibold text-foreground">Dashboard Overview</h1>
           <p className="text-muted-foreground mt-1">
-            Métricas y estado general de tu integración en el e-commerce.
+            Metrics and general status of your e-commerce integration.
           </p>
         </div>
         <Button className="gap-2">
           <Download className="h-4 w-4" />
-          Exportar Reporte
+          Export Report
         </Button>
       </div>
 
@@ -166,11 +166,11 @@ export default function UserDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent History Table */}
         <div className="lg:col-span-2">
-          <Card>
+          <Card className="h-full">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Actividad Reciente</CardTitle>
+              <CardTitle className="text-lg">Recent Activity</CardTitle>
               <Button variant="link" className="gap-1 text-primary">
-                Ver Todo <ArrowUpRight className="h-4 w-4" />
+                View All <ArrowUpRight className="h-4 w-4" />
               </Button>
             </CardHeader>
             <CardContent className="p-0">
@@ -179,16 +179,16 @@ export default function UserDashboardPage() {
                   <thead className="bg-muted/50 border-y border-border">
                     <tr>
                       <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Tipo
+                        Type
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Detalle
+                        Detail
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Estado
+                        Status
                       </th>
                       <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Tiempo
+                        Time
                       </th>
                     </tr>
                   </thead>
@@ -200,7 +200,7 @@ export default function UserDashboardPage() {
                 </table>
               </div>
               <div className="px-6 py-3 border-t border-border flex items-center justify-between text-sm text-muted-foreground">
-                <span>Mostrando 4 actividades recientes</span>
+                <span>Showing 4 recent activities</span>
               </div>
             </CardContent>
           </Card>
@@ -210,19 +210,19 @@ export default function UserDashboardPage() {
         <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Scripts de Implementación</CardTitle>
+              <CardTitle className="text-lg">Implementation Scripts</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-sm text-muted-foreground mb-4">
-                Genera o copia los scripts necesarios para tu e-commerce.
+                Generate or copy the necessary scripts for your e-commerce.
               </p>
               <Button variant="outline" className="w-full justify-start gap-2">
                 <Code className="h-4 w-4" />
-                Obtener Script del Chatbot
+                Get Chatbot Script
               </Button>
               <Button variant="outline" className="w-full justify-start gap-2">
                 <Search className="h-4 w-4" />
-                Obtener Script de Búsqueda
+                Get Search Script
               </Button>
             </CardContent>
           </Card>
@@ -230,16 +230,16 @@ export default function UserDashboardPage() {
           {/* Quick Config */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Accesos Rápidos</CardTitle>
+              <CardTitle className="text-lg">Quick Access</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
               <Button variant="ghost" className="w-full justify-start gap-2 border border-border/50">
                 <MessageSquare className="h-4 w-4" />
-                Editar Mensaje de Bienvenida
+                Edit Welcome Message
               </Button>
               <Button variant="ghost" className="w-full justify-start gap-2 border border-border/50">
                 <Package className="h-4 w-4" />
-                Sincronizar Productos Manualmente
+                Manually Sync Products
               </Button>
             </CardContent>
           </Card>

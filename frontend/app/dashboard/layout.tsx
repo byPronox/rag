@@ -55,7 +55,7 @@ export default function UserLayout({
       {/* Main content */}
       <div className="md:pl-64 flex flex-col min-h-screen">
         <UserHeader 
-          title="RAG Intelligence User"
+          title="Overview"
           onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
         />
         <main className="flex-1 p-6">

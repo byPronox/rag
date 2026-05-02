@@ -16,10 +16,10 @@ import { useAuth } from "@/lib/auth-context"
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Productos Exportados", href: "/dashboard/products", icon: PackageSearch },
-  { name: "Configurar Chatbot", href: "/dashboard/chatbot", icon: MessageSquare },
-  { name: "Barra de Búsqueda", href: "/dashboard/search", icon: SearchCode },
-  { name: "Historial", href: "/dashboard/history", icon: History },
+  { name: "Exported Products", href: "/dashboard/products", icon: PackageSearch },
+  { name: "Configure Chatbot", href: "/dashboard/chatbot", icon: MessageSquare },
+  { name: "Search Bar", href: "/dashboard/search", icon: SearchCode },
+  { name: "History", href: "/dashboard/history", icon: History },
 ]
 
 const secondaryNavigation = [
@@ -53,7 +53,6 @@ export function UserSidebar() {
         {/* Navigation */}
         <nav className="flex-1 px-3 space-y-1">
           {navigation.map((item) => {
-            // Actualizado para que no se marque activo en todo momento si estás en subrutas de dashboard
             const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href))
             return (
               <Link
