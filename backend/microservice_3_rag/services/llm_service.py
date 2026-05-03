@@ -1,17 +1,13 @@
 from groq import Groq
-from config.settings import settings
 
-client = Groq(api_key=settings.GROQ_API_KEY) if settings.GROQ_API_KEY else None
-
-def generate_rag_response(system_prompt: str, llm_model: str, context_products: list, chat_history: list, user_message: str, groq_api_key: str):
+def generate_rag_response(supreme_prompt: str, tenant_prompt: str, llm_model: str, context_products: list, chat_history: list, user_message: str, groq_api_key: str):
     
-    # Validamos que el admin haya guardado la llave
     if not groq_api_key:
-        return "ERROR: El administrador del sistema no ha configurado la Master API Key de Groq."
+        return "ERROR: El administrador del sistema no ha configurado la Master API Key de Groq.", 0
 
-    # Iniciamos el cliente con la llave de la base de datos
     client = Groq(api_key=groq_api_key)
 
+    # Armamos el texto del catálogo
     context_text = "AVAILABLE CATALOG:\n"
     if not context_products:
         context_text += "No products match the search.\n"
@@ -19,8 +15,10 @@ def generate_rag_response(system_prompt: str, llm_model: str, context_products: 
         for p in context_products:
             context_text += f"- {p['name']} (SKU: {p['sku']}) | Price: ${p['price']} | Stock: {p['stock']}\n"
     
+    full_system_content = f"{supreme_prompt}\n\n[STORE OWNER INSTRUCTIONS]:\n{tenant_prompt}\n\n{context_text}"
+    
     messages = [
-        {"role": "system", "content": f"{system_prompt}\n\nCONTEXT:\n{context_text}"}
+        {"role": "system", "content": full_system_content}
     ]
     
     for role, msg in chat_history:
@@ -34,6 +32,8 @@ def generate_rag_response(system_prompt: str, llm_model: str, context_products: 
             model=llm_model,
             temperature=0.2,
         )
-        return chat_completion.choices[0].message.content
+        reply = chat_completion.choices[0].message.content
+        tokens = chat_completion.usage.total_tokens
+        return reply, tokens
     except Exception as e:
-        return f"Error communicating with LLM: {str(e)}"
+        return f"Error communicating with LLM: {str(e)}", 0
