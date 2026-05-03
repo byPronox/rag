@@ -168,7 +168,15 @@ export interface AIModel {
 }
 
 export async function getModels(isAdmin: boolean = false): Promise<AIModel[]> {
+  // --- INICIO DEBUG ---
+  console.log("🚨 [DEBUG API] getModels fue llamado.");
+  console.log("🚨 [DEBUG API] ¿Es Admin?:", isAdmin);
+  
   const url = isAdmin ? ADMIN_ENDPOINTS.models : USER_ENDPOINTS.models;
+  
+  console.log("🚨 [DEBUG API] La URL elegida es:", url);
+  // --- FIN DEBUG ---
+  
   return apiGet<AIModel[]>(url);
 }
 

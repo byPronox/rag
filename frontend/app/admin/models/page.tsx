@@ -71,10 +71,18 @@ export default function ModelsPage() {
   const [isSyncing, setIsSyncing] = useState(false)
 
   // Cargar modelos desde el Backend
+// Cargar modelos desde el Backend
   const fetchModels = async () => {
+    // --- INICIO DEBUG ---
+    console.log("🔍 [DEBUG PAGE] Iniciando fetchModels en el Panel de Administrador");
+    console.log("🔍 [DEBUG PAGE] Voy a llamar a getModels(true) ahora mismo...");
+    // --- FIN DEBUG ---
+
     setIsLoading(true)
     try {
-      const data = await getModels(true) 
+      const data = await getModels(true) // Le pasamos TRUE de forma forzada
+      
+      console.log("🔍 [DEBUG PAGE] Modelos recibidos:", data.length);
       setModels(data)
     } catch (error) {
       console.error("Error fetching models:", error)
