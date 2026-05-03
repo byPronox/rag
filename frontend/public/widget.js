@@ -8,7 +8,11 @@
     }
 
     // IMPORTANTE: Pon aquí la URL real de tu Microservicio 3 (RAG)
-    const RAG_API_URL = localConfig.apiUrl; 
+    let RAG_API_URL = localConfig.apiUrl; 
+
+    if (RAG_API_URL && !RAG_API_URL.startsWith('http')) {
+        RAG_API_URL = 'https://' + RAG_API_URL;
+    }
 
     // Valores por defecto (se usarán si el servidor tarda o falla)
     let color = localConfig.color || "#8b5cf6";
