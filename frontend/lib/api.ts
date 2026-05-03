@@ -219,6 +219,7 @@ export interface GlobalSettings {
   default_embedding_model: string
   default_welcome_message: string
   default_system_prompt: string
+  supreme_system_prompt: string
   groq_api_key?: string
   maintenance_mode: boolean
 }
