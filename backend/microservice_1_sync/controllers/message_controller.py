@@ -27,8 +27,7 @@ def process_product_message(ch, method, properties, body):
         webhook_url = data.get('webhook_url')
         
         with conn.cursor() as cur:
-            # --- SECURITY LAYER ---
-            cur.execute("SELECT id FROM user_configs WHERE system_api_key = %s AND is_active = TRUE", (api_key,))
+            cur.execute("SELECT user_id FROM user_configs WHERE system_api_key = %s AND is_active = TRUE", (api_key,))
             user = cur.fetchone()
             
             if not user:

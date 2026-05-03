@@ -47,6 +47,7 @@ CREATE TABLE global_settings (
     default_embedding_model VARCHAR(100) REFERENCES ai_models(id),
     default_welcome_message TEXT DEFAULT 'Hello! How can I help you today?',
     default_system_prompt TEXT DEFAULT 'You are an expert sales assistant...',
+    supreme_system_prompt TEXT DEFAULT 'You are an expert sales assistant. CRITICAL RULES: 1. ONLY use the AVAILABLE CATALOG. 2. NEVER guess prices or stock. 3. If the product is not in context, apologize and decline.',
     groq_api_key VARCHAR(255),
     maintenance_mode BOOLEAN DEFAULT FALSE,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -88,7 +89,7 @@ CREATE TABLE user_configs (
 -- Vector Table: Synchronized products catalog
 CREATE TABLE product_embeddings (
     variant_id INTEGER,
-    user_id INTEGER REFERENCES user_configs(id) ON DELETE CASCADE,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, -- Corrected: References users(id) directly
     sku VARCHAR(100),
     display_name TEXT,
     description TEXT,
