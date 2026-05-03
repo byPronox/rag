@@ -103,7 +103,8 @@ export default function ChatbotConfigPage() {
   window.RAG_CONFIG = {
     apiKey: "${config.system_api_key}",
     color: "${config.theme_color}",
-    icon: "${config.chat_icon}"
+    icon: "${config.chat_icon}",
+    apiUrl: "${process.env.NEXT_PUBLIC_RAG_API_URL}"
   };
 </script>
 <script src="https://rag-frontend-tan.vercel.app/widget.js" async></script>

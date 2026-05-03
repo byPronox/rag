@@ -9,7 +9,7 @@
 
     const color = config.color || "#8b5cf6";
     // IMPORTANTE: Pon aquí la URL real de tu Microservicio 3 (RAG)
-    const RAG_API_URL = "http://localhost:8001"; // Cambia esto por tu URL de Railway cuando lo subas
+    const RAG_API_URL = config.apiUrl; // Cambia esto por tu URL de Railway cuando lo subas
 
     // 2. Inyectar CSS directamente desde JS (para no pedirle al cliente que instale CSS)
     const style = document.createElement('style');
