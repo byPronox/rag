@@ -7,9 +7,8 @@
         return;
     }
 
-    // IMPORTANTE: Pon aquí la URL real de tu Microservicio 3 (RAG)
-    let RAG_API_URL = localConfig.apiUrl; 
-
+    // 2. IMPORTANTE: Definir la URL y aplicar MAGIA ANTI-ERRORES
+    let RAG_API_URL = localConfig.apiUrl;
     if (RAG_API_URL && !RAG_API_URL.startsWith('http')) {
         RAG_API_URL = 'https://' + RAG_API_URL;
     }
@@ -19,7 +18,7 @@
     let welcomeMessage = "Hello! How can I help you find the perfect product today?";
     let iconName = localConfig.icon || "Bot";
 
-    // 2. MAGIA: Pedimos la configuración real a la base de datos
+    // 3. MAGIA DINÁMICA: Pedimos la configuración real a la base de datos
     try {
         const configResponse = await fetch(RAG_API_URL + '/api/v1/chat/config', {
             method: 'GET',
@@ -37,7 +36,7 @@
         console.warn("RAG Chatbot: No se pudo cargar la config dinámica, usando defaults.", err);
     }
 
-    // 3. Inyectar CSS directamente desde JS (ahora usa el color de la BD)
+    // 4. Inyectar CSS directamente desde JS (ahora usa el color de la BD)
     const style = document.createElement('style');
     style.innerHTML = `
         #rag-widget-container { position: fixed; bottom: 20px; right: 20px; z-index: 99999; font-family: ui-sans-serif, system-ui, sans-serif; }
@@ -56,7 +55,7 @@
     `;
     document.head.appendChild(style);
 
-    // 4. Crear el HTML del Widget (ahora inyecta welcomeMessage de la BD)
+    // 5. Crear el HTML del Widget (ahora inyecta welcomeMessage de la BD)
     const container = document.createElement('div');
     container.id = 'rag-widget-container';
     container.innerHTML = `
@@ -84,7 +83,7 @@
     `;
     document.body.appendChild(container);
 
-    // 5. Lógica de Interacción
+    // 6. Lógica de Interacción
     const btn = document.getElementById('rag-widget-btn');
     const win = document.getElementById('rag-chat-window');
     const closeBtn = document.getElementById('rag-chat-close');
@@ -109,7 +108,7 @@
         messages.scrollTop = messages.scrollHeight;
     };
 
-    // 6. Llamada al Microservicio 3 para enviar mensajes
+    // 7. Llamada al Microservicio 3 para enviar mensajes
     const sendMessage = async () => {
         const text = input.value.trim();
         if (!text) return;
