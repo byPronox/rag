@@ -6,7 +6,7 @@ def search_similar_products(db: Session, user_id: int, query_vector: list, limit
         SELECT variant_id, sku, display_name, price, stock, category 
         FROM product_embeddings 
         WHERE user_id = :user_id 
-        ORDER BY embedding <=> :vector::vector 
+        ORDER BY embedding <=> CAST(:vector AS vector) 
         LIMIT :limit
     """)
     result = db.execute(sql, {"user_id": user_id, "vector": str(query_vector), "limit": limit}).fetchall()
