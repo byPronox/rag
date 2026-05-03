@@ -17,8 +17,11 @@ class ChatRequest(BaseModel):
 
 @router.get("/config")
 def get_chat_config(tenant: dict = Depends(get_tenant_from_api_key)):
-    """El frontend llama a este endpoint al abrir el chat para saber cómo saludar"""
-    return {"welcome_message": tenant["welcome_message"]}
+    return {
+        "welcome_message": tenant["welcome_message"],
+        "theme_color": tenant.get("theme_color", "#8b5cf6"),
+        "chat_icon": tenant.get("chat_icon", "Bot")
+    }
 
 @router.post("/")
 def chat_interaction(request: ChatRequest, db: Session = Depends(get_db), tenant: dict = Depends(get_tenant_from_api_key)):

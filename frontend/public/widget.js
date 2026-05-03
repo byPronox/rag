@@ -1,17 +1,39 @@
 // Este script se inyecta en la página del cliente
-(function() {
-    // 1. Leer la configuración que el cliente pegó en su HTML
-    const config = window.RAG_CONFIG || {};
-    if (!config.apiKey) {
+(async function() {
+    // 1. Leer la configuración base que el cliente pegó en su HTML
+    const localConfig = window.RAG_CONFIG || {};
+    if (!localConfig.apiKey) {
         console.error("RAG Chatbot: apiKey no configurada.");
         return;
     }
 
-    const color = config.color || "#8b5cf6";
     // IMPORTANTE: Pon aquí la URL real de tu Microservicio 3 (RAG)
-    const RAG_API_URL = config.apiUrl; // Cambia esto por tu URL de Railway cuando lo subas
+    const RAG_API_URL = localConfig.apiUrl; 
 
-    // 2. Inyectar CSS directamente desde JS (para no pedirle al cliente que instale CSS)
+    // Valores por defecto (se usarán si el servidor tarda o falla)
+    let color = localConfig.color || "#8b5cf6";
+    let welcomeMessage = "Hello! How can I help you find the perfect product today?";
+    let iconName = localConfig.icon || "Bot";
+
+    // 2. MAGIA: Pedimos la configuración real a la base de datos
+    try {
+        const configResponse = await fetch(RAG_API_URL + '/api/v1/chat/config', {
+            method: 'GET',
+            headers: { 'x-api-key': localConfig.apiKey }
+        });
+        
+        if (configResponse.ok) {
+            const dbConfig = await configResponse.json();
+            // Sobrescribimos los valores locales con los reales de la base de datos
+            if (dbConfig.welcome_message) welcomeMessage = dbConfig.welcome_message;
+            if (dbConfig.theme_color) color = dbConfig.theme_color;
+            if (dbConfig.chat_icon) iconName = dbConfig.chat_icon;
+        }
+    } catch (err) {
+        console.warn("RAG Chatbot: No se pudo cargar la config dinámica, usando defaults.", err);
+    }
+
+    // 3. Inyectar CSS directamente desde JS (ahora usa el color de la BD)
     const style = document.createElement('style');
     style.innerHTML = `
         #rag-widget-container { position: fixed; bottom: 20px; right: 20px; z-index: 99999; font-family: ui-sans-serif, system-ui, sans-serif; }
@@ -30,7 +52,7 @@
     `;
     document.head.appendChild(style);
 
-    // 3. Crear el HTML del Widget
+    // 4. Crear el HTML del Widget (ahora inyecta welcomeMessage de la BD)
     const container = document.createElement('div');
     container.id = 'rag-widget-container';
     container.innerHTML = `
@@ -43,7 +65,7 @@
                 <button id="rag-chat-close" style="background:none;border:none;color:white;cursor:pointer;font-size:20px;padding:0;">&times;</button>
             </div>
             <div id="rag-chat-messages">
-                <div class="rag-msg rag-msg-bot">Hello! How can I help you find the perfect product today?</div>
+                <div class="rag-msg rag-msg-bot">${welcomeMessage}</div>
             </div>
             <div id="rag-chat-input-container">
                 <input type="text" id="rag-chat-input" placeholder="Type your message...">
@@ -58,7 +80,7 @@
     `;
     document.body.appendChild(container);
 
-    // 4. Lógica de Interacción
+    // 5. Lógica de Interacción
     const btn = document.getElementById('rag-widget-btn');
     const win = document.getElementById('rag-chat-window');
     const closeBtn = document.getElementById('rag-chat-close');
@@ -83,7 +105,7 @@
         messages.scrollTop = messages.scrollHeight;
     };
 
-    // 5. Llamada al Microservicio 3
+    // 6. Llamada al Microservicio 3 para enviar mensajes
     const sendMessage = async () => {
         const text = input.value.trim();
         if (!text) return;
@@ -91,7 +113,6 @@
         addMessage(text, true);
         input.value = '';
 
-        // Mostramos indicador de escribiendo...
         const typingId = "typing-" + Date.now();
         const typingDiv = document.createElement('div');
         typingDiv.id = typingId;
@@ -105,13 +126,13 @@
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'x-api-key': config.apiKey
+                    'x-api-key': localConfig.apiKey
                 },
                 body: JSON.stringify({ message: text, session_id: 'web_' + Date.now() })
             });
             
             const data = await response.json();
-            document.getElementById(typingId).remove(); // Quitar el "Thinking..."
+            document.getElementById(typingId).remove(); 
             addMessage(data.reply || data.answer || "Sorry, I couldn't understand that.", false);
         } catch (err) {
             document.getElementById(typingId).remove();
