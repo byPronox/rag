@@ -7,7 +7,6 @@
         return;
     }
 
-    // 2. IMPORTANTE: Definir la URL y aplicar MAGIA ANTI-ERRORES
     let RAG_API_URL = localConfig.apiUrl;
     if (RAG_API_URL && !RAG_API_URL.startsWith('http')) {
         RAG_API_URL = 'https://' + RAG_API_URL;
