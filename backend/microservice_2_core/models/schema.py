@@ -78,6 +78,7 @@ class GlobalSetting(Base):
     default_embedding_model = Column(String(50), default="all-MiniLM-L6-v2")
     default_welcome_message = Column(Text, default="Hello! How can I help you today?")
     default_system_prompt = Column(Text, default="You are an expert sales assistant...")
+    supreme_system_prompt = Column(Text, default="You are an expert sales assistant. CRITICAL RULES: 1. ONLY use the AVAILABLE CATALOG. 2. NEVER guess prices or stock. 3. If the product is not in context, apologize and decline.")
     groq_api_key = Column(String(255), nullable=True)
     maintenance_mode = Column(Boolean, default=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
