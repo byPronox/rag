@@ -1,11 +1,11 @@
 -- ==========================================
--- SCRIPT DE INICIALIZACIÓN - SAAS RAG
+-- INITIALIZATION SCRIPT - SAAS RAG
 -- ==========================================
 
--- 1. Habilitar la extensión de IA (Vectores)
+-- 1. Enable AI extension (pgvector)
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- 2. Borrar tablas existentes en orden inverso a sus dependencias (Para poder reiniciar la BD limpia)
+-- 2. Drop existing tables in reverse order of dependencies (To allow clean DB reset)
 DROP TABLE IF EXISTS product_embeddings CASCADE;
 DROP TABLE IF EXISTS chat_history CASCADE;
 DROP TABLE IF EXISTS search_history CASCADE;
@@ -15,10 +15,10 @@ DROP TABLE IF EXISTS global_settings CASCADE;
 DROP TABLE IF EXISTS ai_models CASCADE;
 
 -- ==========================================
--- 3. CREACIÓN DE TABLAS MAESTRAS (Sin dependencias)
+-- 3. MASTER TABLES CREATION (No dependencies)
 -- ==========================================
 
--- Catálogo de Modelos IA
+-- AI Models Catalog
 CREATE TABLE ai_models (
     id VARCHAR(100) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
@@ -31,7 +31,7 @@ CREATE TABLE ai_models (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Modelos por defecto obligatorios para que el sistema no se rompa al iniciar
+-- Mandatory default models so the system doesn't break on startup
 INSERT INTO ai_models (id, name, provider, type, is_active, description, dimensions) 
 VALUES ('all-MiniLM-L6-v2', 'all-MiniLM-L6-v2', 'Sentence Transformers', 'embedding', true, 'Local embedding model', 384)
 ON CONFLICT (id) DO NOTHING;
@@ -40,7 +40,7 @@ INSERT INTO ai_models (id, name, provider, type, is_active, description)
 VALUES ('llama3-8b-8192', 'Llama 3 8B', 'Groq', 'llm', true, 'Fast inference LLM model')
 ON CONFLICT (id) DO NOTHING;
 
--- Configuración Global del SaaS
+-- Global SaaS Configuration
 CREATE TABLE global_settings (
     id INTEGER PRIMARY KEY DEFAULT 1,
     default_llm_model VARCHAR(100) REFERENCES ai_models(id),
@@ -53,12 +53,12 @@ CREATE TABLE global_settings (
     CONSTRAINT single_row CHECK (id = 1) 
 );
 
--- Inserción de la configuración global base
+-- Insert base global configuration
 INSERT INTO global_settings (id, default_llm_model, default_embedding_model) 
 VALUES (1, 'llama3-8b-8192', 'all-MiniLM-L6-v2') 
 ON CONFLICT DO NOTHING;
 
--- Tabla Padre: Usuarios (Tenants / Admins)
+-- Parent Table: Users (Tenants / Admins)
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(100) UNIQUE NOT NULL,
@@ -68,10 +68,10 @@ CREATE TABLE users (
 );
 
 -- ==========================================
--- 4. CREACIÓN DE TABLAS HIJAS (Con dependencias)
+-- 4. CHILD TABLES CREATION (With dependencies)
 -- ==========================================
 
--- Tabla Hija: Configuración de cada usuario (1 a 1 con Usuarios)
+-- Child Table: User configurations (1-to-1 with Users)
 CREATE TABLE user_configs (
     id SERIAL PRIMARY KEY,
     user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -80,10 +80,12 @@ CREATE TABLE user_configs (
     selected_llm_model VARCHAR(100) DEFAULT 'llama3-8b-8192' REFERENCES ai_models(id) ON DELETE SET DEFAULT,
     welcome_message TEXT DEFAULT 'Hello! How can I help you today?',
     system_prompt TEXT DEFAULT 'You are an expert sales assistant...',
+    theme_color VARCHAR(50) DEFAULT '#8b5cf6',
+    chat_icon VARCHAR(50) DEFAULT 'Bot',
     is_active BOOLEAN DEFAULT TRUE
 );
 
--- Tabla de Vectores: Catálogo de productos sincronizados
+-- Vector Table: Synchronized products catalog
 CREATE TABLE product_embeddings (
     variant_id INTEGER,
     user_id INTEGER REFERENCES user_configs(id) ON DELETE CASCADE,
@@ -108,7 +110,7 @@ CREATE TABLE product_embeddings (
     PRIMARY KEY (variant_id, user_id)
 );
 
--- Historial de Búsquedas Semánticas (Para Métricas)
+-- Semantic Search History (For Metrics)
 CREATE TABLE search_history (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
@@ -116,14 +118,14 @@ CREATE TABLE search_history (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Historial de Conversaciones del Chatbot (Actualizado con tokens y latencia para Métricas)
+-- Chatbot Conversation History (Updated with tokens and latency for Metrics)
 CREATE TABLE chat_history (
     id SERIAL PRIMARY KEY,
     session_id VARCHAR(100),
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     role VARCHAR(20),
     message TEXT,
-    tokens_used INTEGER DEFAULT 0,   -- <--- Añadido aquí desde el inicio
-    latency_ms INTEGER DEFAULT 0,    -- <--- Añadido aquí desde el inicio
+    tokens_used INTEGER DEFAULT 0,
+    latency_ms INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

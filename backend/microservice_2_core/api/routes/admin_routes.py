@@ -25,6 +25,7 @@ def update_global_settings(data: GlobalSettingsUpdate, admin=Depends(get_current
     settings.default_embedding_model = data.default_embedding_model
     settings.default_welcome_message = data.default_welcome_message
     settings.default_system_prompt = data.default_system_prompt
+    settings.supreme_system_prompt = data.supreme_system_prompt
     settings.maintenance_mode = data.maintenance_mode
     
     if data.groq_api_key:

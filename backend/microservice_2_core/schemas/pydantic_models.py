@@ -26,6 +26,7 @@ class GlobalSettingsUpdate(BaseModel):
     default_embedding_model: str
     default_welcome_message: str
     default_system_prompt: str
+    supreme_system_prompt: str
     groq_api_key: str | None = None
     maintenance_mode: bool
 
