@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from database.connection import get_db
 from models.schema import User, UserCompany, AIModel
 from api.deps import get_current_user
-from schemas.pydantic_models import UserConfigUpdate
+from schemas.pydantic_models import CompanyConfigUpdate
 
 router = APIRouter()
 
