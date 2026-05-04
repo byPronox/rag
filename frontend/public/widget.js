@@ -6,6 +6,14 @@
         console.error("RAG Chatbot: apiKey no configurada.");
         return;
     }
+    // NUEVO: Validar que exista el companyId
+    if (!localConfig.companyId) {
+        console.error("RAG Chatbot: companyId no configurado.");
+        return;
+    }
+
+    // Generar un ID de sesión ÚNICO por carga de página para mantener el historial
+    const sessionId = 'web_' + Date.now();
 
     // 2. URL y Magia Anti-Errores
     let RAG_API_URL = localConfig.apiUrl || "https://microservice-3-production.up.railway.app"; 
@@ -29,9 +37,9 @@
         Close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>`
     };
 
-    // 4. Pedir configuración dinámica
+    // 4. Pedir configuración dinámica (AQUÍ SE INYECTA EL COMPANY_ID PARA EVITAR EL ERROR 422)
     try {
-        const configResponse = await fetch(RAG_API_URL + '/api/v1/chat/config', {
+        const configResponse = await fetch(`${RAG_API_URL}/api/v1/chat/config?company_id=${localConfig.companyId}`, {
             method: 'GET',
             headers: { 'x-api-key': localConfig.apiKey }
         });
@@ -40,9 +48,11 @@
             if (dbConfig.welcome_message) welcomeMessage = dbConfig.welcome_message;
             if (dbConfig.theme_color) color = dbConfig.theme_color;
             if (dbConfig.chat_icon) iconName = dbConfig.chat_icon;
+        } else {
+            console.warn("RAG Chatbot: Respuesta no exitosa del servidor al cargar config.");
         }
     } catch (err) {
-        console.warn("RAG Chatbot: Usando defaults.");
+        console.warn("RAG Chatbot: Usando defaults. Error:", err);
     }
 
     const selectedSvg = icons[iconName] || icons.Bot;
@@ -159,7 +169,7 @@
         // Avatar
         const avatar = document.createElement('div');
         avatar.className = 'rag-avatar';
-        avatar.style.background = color; // Ambos avatares usan el color primario
+        avatar.style.background = color; 
         avatar.innerHTML = isUser ? icons.User : selectedSvg;
 
         // Burbuja
@@ -203,13 +213,18 @@
         messages.scrollTop = messages.scrollHeight;
 
         try {
+            // AQUÍ SE INYECTA EL COMPANY_ID PARA QUE EL RAG SEPA EN QUÉ CATÁLOGO BUSCAR
             const response = await fetch(RAG_API_URL + '/api/v1/chat/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'x-api-key': localConfig.apiKey
                 },
-                body: JSON.stringify({ message: text, session_id: 'web_' + Date.now() })
+                body: JSON.stringify({ 
+                    message: text, 
+                    session_id: sessionId,
+                    company_id: localConfig.companyId
+                })
             });
             
             const data = await response.json();
