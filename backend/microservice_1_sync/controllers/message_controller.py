@@ -1,5 +1,6 @@
 import json
-import requests # IMPORTANTE AÑADIR ESTO
+import requests
+import re # IMPORTANTE AÑADIR ESTO PARA LIMPIAR EL NOMBRE
 from database.connection import get_db_connection
 from services.embedding_service import embedding_service
 
@@ -15,9 +16,6 @@ def send_feedback_to_odoo(webhook_url, variant_id, error_message):
 
 def process_product_message(ch, method, properties, body):
     conn = get_db_connection()
-    data = {}
-    webhook_url = None
-    variant_id = None
     
     try:
         data = json.loads(body)
@@ -27,25 +25,42 @@ def process_product_message(ch, method, properties, body):
         webhook_url = data.get('webhook_url')
         
         with conn.cursor() as cur:
+            # --- CAPA DE AUTENTICACIÓN ---
+            # La tabla user_configs ahora solo valida la API Key maestra del Inquilino
             cur.execute("SELECT user_id FROM user_configs WHERE system_api_key = %s AND is_active = TRUE", (api_key,))
             user = cur.fetchone()
             
             if not user:
-                error_msg = f"Invalid or missing API Key for variant {variant_id}."
+                error_msg = f"Invalid or missing API Key for action {action}."
                 print(f"[AUTH FAILED] {error_msg}")
                 send_feedback_to_odoo(webhook_url, variant_id, error_msg)
                 ch.basic_ack(delivery_tag=method.delivery_tag)
                 return
             
             user_id = user[0]
-            print(f"Processing '{action}' for product {variant_id} (Tenant ID: {user_id})...")
+            print(f"Processing '{action}' (Tenant ID: {user_id})...")
 
-            if action in ['create', 'update', 'sync']:
+            if action == 'sync_companies':
+                companies_data = data.get('companies', [])
+                for comp in companies_data:
+                    cur.execute("""
+                        INSERT INTO user_companies (user_id, platform, platform_company_id, company_name)
+                        VALUES (%s, 'odoo', %s, %s)
+                        ON CONFLICT (user_id, platform, platform_company_id) 
+                        DO UPDATE SET company_name = EXCLUDED.company_name;
+                    """, (user_id, str(comp['id']), comp['name']))
+                
+                print(f"[SUCCESS] Handshake complete. Synced {len(companies_data)} companies.")
+            
+            elif action in ['create', 'update', 'sync']:
+                raw_display_name = data.get('display_name', '')
+                clean_name = re.sub(r'^\[.*?\]\s*', '', raw_display_name)
+
                 text_to_embed = (
                     f"Company: {data.get('company_name', '')}. "
-                    f"Product: {data['display_name']}. Category: {data.get('category', '')}. "
-                    f"Price: {data['price_included']} {data.get('currency', 'USD')} (Final price including {data.get('tax_percent', 0)}% tax). "
-                    f"Base price without tax is {data['price_excluded']} {data.get('currency', 'USD')}. "
+                    f"Product: {clean_name}. Category: {data.get('category', '')}. "
+                    f"Price: {data.get('price_included', 0)} {data.get('currency', 'USD')} (Final price including {data.get('tax_percent', 0)}% tax). "
+                    f"Base price without tax is {data.get('price_excluded', 0)} {data.get('currency', 'USD')}. "
                     f"Description: {data.get('description', '')}. "
                     f"Accessories for this product: {data.get('accessories', 'None')}. "
                     f"Alternative products: {data.get('alternatives', 'None')}."
@@ -81,20 +96,22 @@ def process_product_message(ch, method, properties, body):
                         alternatives = EXCLUDED.alternatives,
                         embedding = EXCLUDED.embedding;
                 """, (
-                    variant_id, user_id, data['sku'], data['display_name'], data['description'], 
-                    data['price_excluded'], data['price_included'], data['tax_percent'], data['currency'],
-                    data['stock'], data.get('category'), data.get('website_url'), 
+                    variant_id, user_id, data.get('sku'), clean_name, data.get('description'), 
+                    data.get('price_excluded'), data.get('price_included'), data.get('tax_percent'), data.get('currency'),
+                    data.get('stock'), data.get('category'), data.get('website_url'), 
                     data.get('image_128_url'), data.get('image_512_url'), data.get('image_1920_url'), 
-                    data.get('company_id'), data.get('company_name'), 
+                    str(data.get('company_id')), data.get('company_name'), # company_id como string
                     data.get('accessories', ''), data.get('alternatives', ''), vector
                 ))
+                print(f"[SUCCESS] Variant {variant_id} embedded and saved securely.")
             
+            # --- LÓGICA 3: ELIMINACIÓN ---
             elif action == 'delete':
                 cur.execute("DELETE FROM product_embeddings WHERE variant_id = %s AND user_id = %s", (variant_id, user_id))
+                print(f"[SUCCESS] Variant {variant_id} deleted securely.")
         
         conn.commit()
         ch.basic_ack(delivery_tag=method.delivery_tag)
-        print(f"[SUCCESS] Variant {variant_id} saved securely.")
 
     except Exception as e:
         error_msg = f"Database or processing failure: {str(e)}"
@@ -104,4 +121,5 @@ def process_product_message(ch, method, properties, body):
         ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
     
     finally:
-        conn.close()
+        if conn:
+            conn.close()

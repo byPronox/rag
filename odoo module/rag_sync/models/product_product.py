@@ -11,6 +11,7 @@ class ProductProduct(models.Model):
         
         base_url = Config.get_param('rag_rabbitmq_sync.public_base_url') or Config.get_param('web.base.url')
         base_url = base_url.rstrip('/')
+        
 
         accessories = self.accessory_product_ids.mapped('display_name')
         alternatives = self.alternative_product_ids.mapped('display_name')
@@ -52,6 +53,8 @@ class ProductProduct(models.Model):
             'template_id': self.product_tmpl_id.id,
             'sku': self.default_code,
             'display_name': self.display_name,
+            'company_id': str(self.company_id.id) if self.company_id else 'global',       
+            'company_name': self.company_id.name if self.company_id else 'All Companies',
             'description': clean_description,
             'accessories': ", ".join(accessories) if accessories else "",
             'alternatives': ", ".join(alternatives) if alternatives else "",

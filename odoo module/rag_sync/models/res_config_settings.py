@@ -35,15 +35,21 @@ class ResConfigSettings(models.TransientModel):
 
     def set_values(self):
         super(ResConfigSettings, self).set_values()
-        self.env['ir.config_parameter'].sudo().set_param(
-            'rag_rabbitmq_sync.sync_active', 
-            str(self.rag_sync_active)
-        )
+        self.env['ir.config_parameter'].sudo().set_param('rag_rabbitmq_sync.sync_active', str(self.rag_sync_active))
+        
+        if self.rag_sync_active and self.rag_api_key:
+            active_companies = self.env['res.company'].sudo().search([])
+            companies_data = [{'id': str(c.id), 'name': c.name} for c in active_companies]
+            
+            payload = {
+                'api_key': self.rag_api_key,
+                'action': 'sync_companies',
+                'companies': companies_data
+            }
+            self.env['rag.rabbitmq.sender'].send_message(payload)
 
     def get_values(self):
         res = super(ResConfigSettings, self).get_values()
         sync_active_str = self.env['ir.config_parameter'].sudo().get_param('rag_rabbitmq_sync.sync_active', 'True')
-        res.update(
-            rag_sync_active=sync_active_str.lower() == 'true'
-        )
+        res.update(rag_sync_active=sync_active_str.lower() == 'true')
         return res

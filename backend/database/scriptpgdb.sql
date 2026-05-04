@@ -1,14 +1,16 @@
 -- ==========================================
--- INITIALIZATION SCRIPT - SAAS RAG
+-- INITIALIZATION SCRIPT - SAAS RAG ENTERPRISE
+-- Multi-Tenant & Multi-Company Architecture
 -- ==========================================
 
 -- 1. Enable AI extension (pgvector)
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- 2. Drop existing tables in reverse order of dependencies (To allow clean DB reset)
+-- 2. Drop existing tables in reverse order of dependencies (Clean DB reset)
 DROP TABLE IF EXISTS product_embeddings CASCADE;
 DROP TABLE IF EXISTS chat_history CASCADE;
 DROP TABLE IF EXISTS search_history CASCADE;
+DROP TABLE IF EXISTS user_companies CASCADE; -- NEW: Multi-company config
 DROP TABLE IF EXISTS user_configs CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 DROP TABLE IF EXISTS global_settings CASCADE;
@@ -31,7 +33,7 @@ CREATE TABLE ai_models (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Mandatory default models so the system doesn't break on startup
+-- Mandatory default models to prevent system crashes on startup
 INSERT INTO ai_models (id, name, provider, type, is_active, description, dimensions) 
 VALUES ('all-MiniLM-L6-v2', 'all-MiniLM-L6-v2', 'Sentence Transformers', 'embedding', true, 'Local embedding model', 384)
 ON CONFLICT (id) DO NOTHING;
@@ -72,24 +74,42 @@ CREATE TABLE users (
 -- 4. CHILD TABLES CREATION (With dependencies)
 -- ==========================================
 
--- Child Table: User configurations (1-to-1 with Users)
+-- Global Tenant Config (1-to-1 with Users)
+-- NOTE: UI and Chat configurations have been moved to 'user_companies'
 CREATE TABLE user_configs (
     id SERIAL PRIMARY KEY,
     user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     system_api_key VARCHAR(255) UNIQUE,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+-- Company-Specific Chat Configurations (1-to-Many with Users)
+CREATE TABLE user_companies (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    
+    -- Agnostic Platform Integration (Ready for Odoo, Shopify, etc.)
+    platform VARCHAR(50) DEFAULT 'odoo', 
+    platform_company_id VARCHAR(100) NOT NULL, -- VARCHAR supports integers (Odoo) or UUIDs
+    company_name VARCHAR(255) NOT NULL,
+    
+    -- Isolated Chatbot Configuration per Company
     selected_embedding_model VARCHAR(100) DEFAULT 'all-MiniLM-L6-v2' REFERENCES ai_models(id) ON DELETE SET DEFAULT,
     selected_llm_model VARCHAR(100) DEFAULT 'llama3-8b-8192' REFERENCES ai_models(id) ON DELETE SET DEFAULT,
     welcome_message TEXT DEFAULT 'Hello! How can I help you today?',
     system_prompt TEXT DEFAULT 'You are an expert sales assistant...',
     theme_color VARCHAR(50) DEFAULT '#8b5cf6',
     chat_icon VARCHAR(50) DEFAULT 'Bot',
-    is_active BOOLEAN DEFAULT TRUE
+    is_active BOOLEAN DEFAULT TRUE,
+    
+    -- Prevent duplicate companies for the same tenant and platform
+    UNIQUE(user_id, platform, platform_company_id) 
 );
 
 -- Vector Table: Synchronized products catalog
 CREATE TABLE product_embeddings (
     variant_id INTEGER,
-    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE, -- Corrected: References users(id) directly
+    user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     sku VARCHAR(100),
     display_name TEXT,
     description TEXT,
@@ -103,7 +123,7 @@ CREATE TABLE product_embeddings (
     image_128_url TEXT,
     image_512_url TEXT,
     image_1920_url TEXT,
-    company_id INTEGER,
+    company_id VARCHAR(100),
     company_name VARCHAR(255),
     accessories TEXT,
     alternatives TEXT,
@@ -115,15 +135,17 @@ CREATE TABLE product_embeddings (
 CREATE TABLE search_history (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    company_id VARCHAR(100), -- Added to track which company generated the search
     query_text TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Chatbot Conversation History (Updated with tokens and latency for Metrics)
+-- Chatbot Conversation History (Updated with tokens, latency, and company context)
 CREATE TABLE chat_history (
     id SERIAL PRIMARY KEY,
     session_id VARCHAR(100),
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    company_id VARCHAR(100), -- Added to track which company generated the chat
     role VARCHAR(20),
     message TEXT,
     tokens_used INTEGER DEFAULT 0,
