@@ -3,7 +3,8 @@ from sqlalchemy import func, desc
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from database.connection import get_db
-from models.schema import User, UserConfig, GlobalSetting, AIModel, SearchHistory, ChatHistory
+# IMPORTANTE: Se añadió UserCompany a las importaciones
+from models.schema import User, UserConfig, UserCompany, GlobalSetting, AIModel, SearchHistory, ChatHistory
 from security.jwt_handler import get_password_hash
 from api.deps import get_current_admin, get_current_user
 from schemas.pydantic_models import GlobalSettingsUpdate, UserCreate, ApiKeyResponse, AIModelResponse, AIModelUpdate
@@ -38,22 +39,23 @@ def update_global_settings(data: GlobalSettingsUpdate, admin=Depends(get_current
 
 @router.get("/users")
 def get_all_users(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    """Fetches all users and their basic config stats."""
+    """Fetches all users and their basic stats (now tracking connected companies)."""
     
-    # We join users with user_configs to get the LLM model they are using.
-    # We also do basic counting for the mock stats (you can replace the zeroes with real queries later).
     users = db.query(User, UserConfig).outerjoin(UserConfig, User.id == UserConfig.user_id).all()
     
     result = []
     for user, config in users:
+        # Contamos cuántas sucursales/compañías tiene este cliente
+        companies_count = db.query(UserCompany).filter(UserCompany.user_id == user.id).count()
+        
         result.append({
             "id": user.id,
             "email": user.email,
             "role": user.role,
             "is_active": user.is_active,
-            "created_at": user.id, # Mocking date using ID for simplicity if you don't have created_at
-            "llm_model": config.selected_llm_model if config else "N/A",
-            "total_queries": 0, # You can update this later by joining the search_history table
+            "created_at": user.id, 
+            "connected_companies": companies_count, # En lugar del LLM, mostramos sus compañías
+            "total_queries": 0, 
             "total_tokens": 0
         })
     
@@ -61,7 +63,7 @@ def get_all_users(admin: User = Depends(get_current_admin), db: Session = Depend
 
 @router.post("/users")
 def create_user_by_admin(user_data: UserCreate, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    """Allows the admin to create a new user (User or Admin) directly."""
+    """Allows the admin to create a new user (Tenant or Admin) directly."""
     
     # 1. Check if email exists
     existing = db.query(User).filter(User.email == user_data.email).first()
@@ -75,30 +77,20 @@ def create_user_by_admin(user_data: UserCreate, admin: User = Depends(get_curren
         role=user_data.role
     )
     db.add(new_user)
-    db.flush()
+    db.flush() # Flush para obtener el ID de new_user sin hacer commit final
 
-    # 3. Get Global Settings to populate defaults
-    global_config = db.query(GlobalSetting).filter(GlobalSetting.id == 1).first()
-    default_llm = global_config.default_llm_model if global_config else "llama3-8b-8192"
-    default_emb = global_config.default_embedding_model if global_config else "all-MiniLM-L6-v2"
-    default_welcome = global_config.default_welcome_message if global_config else "Welcome!"
-    default_prompt = global_config.default_system_prompt if global_config else "You are an assistant."
-
+    # 3. Create Clean User Config (Solo el llavero de la API Key)
     new_api_key = f"rag_{secrets.token_urlsafe(32)}"
-
-    # 4. Create User Config
+    
     new_config = UserConfig(
         user_id=new_user.id,
         system_api_key=new_api_key,
-        selected_llm_model=default_llm,
-        selected_embedding_model=default_emb,
-        welcome_message=default_welcome,
-        system_prompt=default_prompt
+        is_active=True
     )
     db.add(new_config)
     db.commit()
 
-    return {"message": "User created successfully"}
+    return {"message": "Usuario creado exitosamente. Las compañías se sincronizarán mediante el Handshake."}
 
 @router.delete("/users/{user_id}")
 def delete_user(user_id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
@@ -107,6 +99,7 @@ def delete_user(user_id: int, admin: User = Depends(get_current_admin), db: Sess
          
     user = db.query(User).filter(User.id == user_id).first()
     config = db.query(UserConfig).filter(UserConfig.user_id == user_id).first()
+    companies = db.query(UserCompany).filter(UserCompany.user_id == user_id).all()
 
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado.")
@@ -114,20 +107,21 @@ def delete_user(user_id: int, admin: User = Depends(get_current_admin), db: Sess
     user.is_active = False
     if config:
         config.is_active = False
+        
+    for company in companies:
+        company.is_active = False
 
     db.commit()
     
-    return {"message": f"El usuario {user.email} ha sido desactivado y ya no tiene acceso al sistema."}
+    return {"message": f"El usuario {user.email} y sus compañías han sido desactivados."}
 
 @router.post("/users/{user_id}/api-key", response_model=ApiKeyResponse)
 def regenerate_user_api_key(user_id: int, admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    """Regenera la llave de integración (Odoo) para un usuario específico"""
     config = db.query(UserConfig).filter(UserConfig.user_id == user_id).first()
     
     if not config:
         raise HTTPException(status_code=404, detail="Configuración de usuario no encontrada")
     
-    # Generamos la nueva llave (usando el mismo formato que ya tenías)
     new_key = f"rag_{secrets.token_urlsafe(32)}"
     config.system_api_key = new_key
     
@@ -160,7 +154,6 @@ def update_model_status(model_id: str, data: AIModelUpdate, admin: User = Depend
 def sync_models_with_groq(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
     """Se conecta a Groq con la Master API Key, descarga los modelos disponibles y los guarda."""
     
-    # 1. Obtenemos la llave maestra de la base de datos
     settings = db.query(GlobalSetting).filter(GlobalSetting.id == 1).first()
     if not settings or not settings.groq_api_key:
         raise HTTPException(status_code=400, detail="Groq API Key no configurada. Ve a Global Settings primero.")
@@ -171,7 +164,6 @@ def sync_models_with_groq(admin: User = Depends(get_current_admin), db: Session 
     }
 
     try:
-        # 2. Llamamos a la API real de Groq
         response = requests.get("https://api.groq.com/openai/v1/models", headers=headers)
         response.raise_for_status()
         groq_data = response.json()
@@ -180,26 +172,23 @@ def sync_models_with_groq(admin: User = Depends(get_current_admin), db: Session 
 
     models_added = 0
     
-    # 3. Procesamos y guardamos los modelos
     for item in groq_data.get("data", []):
         model_id = item.get("id")
         
-        # Ignoramos modelos de sistema internos de Groq (suele haber basura ahí)
         if "whisper" in model_id.lower() or "tool" in model_id.lower():
             continue
             
         existing = db.query(AIModel).filter(AIModel.id == model_id).first()
         
         if not existing:
-            # Si es nuevo, lo creamos y lo guardamos apagado por seguridad
             new_model = AIModel(
                 id=model_id,
-                name=model_id.upper(), # Formato básico de nombre
+                name=model_id.upper(), 
                 provider="Groq",
                 type="llm",
                 is_active=False, 
                 description=f"Official model {model_id} hosted on Groq.",
-                context_window=item.get("context_window", 8192) # Default fallback
+                context_window=item.get("context_window", 8192) 
             )
             db.add(new_model)
             models_added += 1
@@ -207,27 +196,22 @@ def sync_models_with_groq(admin: User = Depends(get_current_admin), db: Session 
     db.commit()
     return {"message": f"Sincronización exitosa. Se detectaron y guardaron {models_added} modelos nuevos."}
 
-
 @router.get("/metrics")
 def get_dashboard_metrics(admin: User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    # 1. Totales Generales
     total_rag_queries = db.query(ChatHistory).filter(ChatHistory.role == "user").count()
     total_searches = db.query(SearchHistory).count()
     total_tokens = db.query(func.sum(ChatHistory.tokens_used)).scalar() or 0
     avg_latency = db.query(func.avg(ChatHistory.latency_ms)).scalar() or 0
 
-    # 2. Top Búsquedas (Agrupamos por el texto de búsqueda y contamos)
     top_searches_query = db.query(
         SearchHistory.query_text, 
         func.count(SearchHistory.id).label('hits')
     ).group_by(SearchHistory.query_text).order_by(desc('hits')).limit(5).all()
     
     top_queries = [
-        # Simulamos un 'relevance' aleatorio o fijo por ahora, ya que requeriría lógica extra
         {"query": q[0], "hits": q[1], "relevance": 95} for q in top_searches_query
     ]
 
-    # 3. Actividad de Usuarios (Quién pregunta más)
     user_activity_query = db.query(
         User.email,
         func.count(ChatHistory.id).label('queries'),
@@ -244,7 +228,7 @@ def get_dashboard_metrics(admin: User = Depends(get_current_admin), db: Session 
         "total_rag_queries": total_rag_queries,
         "total_search_queries": total_searches,
         "total_tokens": total_tokens,
-        "avg_latency_sec": round(avg_latency / 1000, 2), # Convertimos ms a segundos
+        "avg_latency_sec": round(avg_latency / 1000, 2), 
         "top_queries": top_queries,
         "user_activity": user_activity
     }
