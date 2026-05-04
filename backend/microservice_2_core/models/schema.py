@@ -7,22 +7,27 @@ Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
+    
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(100), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(20), default="user") 
     is_active = Column(Boolean, default=True)
     config = relationship("UserConfig", back_populates="user", uselist=False)
+    companies = relationship("UserCompany", back_populates="user")
 
 class UserConfig(Base):
     __tablename__ = "user_configs"
+    
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True)
     system_api_key = Column(String(255), unique=True)
     is_active = Column(Boolean, default=True)
+    user = relationship("User", back_populates="config")
 
 class UserCompany(Base):
     __tablename__ = "user_companies"
+    
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     platform = Column(String(50), default='odoo')
@@ -36,11 +41,13 @@ class UserCompany(Base):
     chat_icon = Column(String(50), default="Bot")
     is_active = Column(Boolean, default=True)
     __table_args__ = (UniqueConstraint('user_id', 'platform', 'platform_company_id', name='_user_platform_company_uc'),)
+    user = relationship("User", back_populates="companies")
 
 class ProductEmbedding(Base):
     __tablename__ = "product_embeddings"
+    
     variant_id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey("user_configs.id"), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     sku = Column(String(100))
     display_name = Column(Text)
     description = Column(Text)
@@ -50,28 +57,32 @@ class ProductEmbedding(Base):
     currency = Column(String(10))
     stock = Column(Numeric)
     category = Column(String(100))
-    accessories = Column(Text)
-    alternatives = Column(Text)
     website_url = Column(Text)
     image_128_url = Column(Text)
     image_512_url = Column(Text)
     image_1920_url = Column(Text)
-    company_id = Column(Integer)
+    company_id = Column(String(100))
     company_name = Column(String(255))
+    accessories = Column(Text)
+    alternatives = Column(Text)
     embedding = Column(Vector(384))
 
 class SearchHistory(Base):
     __tablename__ = "search_history"
+    
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    company_id = Column(String(100))
     query_text = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class ChatHistory(Base):
     __tablename__ = "chat_history"
+    
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String(100))
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    company_id = Column(String(100))
     role = Column(String(20))
     message = Column(Text)
     tokens_used = Column(Integer, default=0)
