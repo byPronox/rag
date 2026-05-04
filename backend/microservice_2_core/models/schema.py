@@ -17,16 +17,25 @@ class User(Base):
 class UserConfig(Base):
     __tablename__ = "user_configs"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    system_api_key = Column(String(255), unique=True, index=True)
-    selected_embedding_model = Column(String(50), default="all-MiniLM-L6-v2")
-    selected_llm_model = Column(String(50), default="llama3-8b-8192")
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), unique=True)
+    system_api_key = Column(String(255), unique=True)
+    is_active = Column(Boolean, default=True)
+
+class UserCompany(Base):
+    __tablename__ = "user_companies"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    platform = Column(String(50), default='odoo')
+    platform_company_id = Column(String(100), nullable=False)
+    company_name = Column(String(255), nullable=False)
+    selected_embedding_model = Column(String(100), ForeignKey("ai_models.id", ondelete="SET DEFAULT"), default="all-MiniLM-L6-v2")
+    selected_llm_model = Column(String(100), ForeignKey("ai_models.id", ondelete="SET DEFAULT"), default="llama3-8b-8192")
     welcome_message = Column(Text, default="Hello! How can I help you today?")
     system_prompt = Column(Text, default="You are an expert sales assistant...")
     theme_color = Column(String(50), default="#8b5cf6")
     chat_icon = Column(String(50), default="Bot")
     is_active = Column(Boolean, default=True)
-    user = relationship("User", back_populates="config")
+    __table_args__ = (UniqueConstraint('user_id', 'platform', 'platform_company_id', name='_user_platform_company_uc'),)
 
 class ProductEmbedding(Base):
     __tablename__ = "product_embeddings"
