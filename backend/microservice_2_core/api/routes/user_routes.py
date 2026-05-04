@@ -4,7 +4,6 @@ from database.connection import get_db
 from models.schema import User, UserCompany, AIModel
 from api.deps import get_current_user
 from schemas.pydantic_models import CompanyConfigUpdate
-
 router = APIRouter()
 
 @router.get("/companies")
@@ -31,7 +30,8 @@ def get_user_config(company_id: str, current_user: User = Depends(get_current_us
     }
 
 @router.put("/config/{company_id}")
-def update_user_config(company_id: str, data: CompanyConfigUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):    company = db.query(UserCompany).filter(UserCompany.user_id == current_user.id, UserCompany.platform_company_id == company_id).first()
+def update_user_config(company_id: str, data: CompanyConfigUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    company = db.query(UserCompany).filter(UserCompany.user_id == current_user.id, UserCompany.platform_company_id == company_id).first()
     if not company:
         raise HTTPException(status_code=404, detail="Compañía no encontrada")
     
