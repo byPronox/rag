@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { UserSidebar } from "@/components/user/user-sidebar"
 import { UserHeader } from "@/components/user/user-header"
+import { CompanyProvider } from "@/lib/company-context"
 import { Spinner } from "@/components/ui/spinner"
 
 export default function UserLayout({
@@ -40,28 +41,31 @@ export default function UserLayout({
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Sidebar */}
-      <UserSidebar />
+    // Envolvemos todo en el CompanyProvider para el estado global
+    <CompanyProvider>
+      <div className="min-h-screen bg-background">
+        {/* Sidebar */}
+        <UserSidebar />
 
-      {/* Mobile sidebar overlay */}
-      {isMobileMenuOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-40 md:hidden"
-          onClick={() => setIsMobileMenuOpen(false)}
-        />
-      )}
+        {/* Mobile sidebar overlay */}
+        {isMobileMenuOpen && (
+          <div 
+            className="fixed inset-0 bg-black/50 z-40 md:hidden"
+            onClick={() => setIsMobileMenuOpen(false)}
+          />
+        )}
 
-      {/* Main content */}
-      <div className="md:pl-64 flex flex-col min-h-screen">
-        <UserHeader 
-          title="Overview"
-          onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
-        />
-        <main className="flex-1 p-6">
-          {children}
-        </main>
+        {/* Main content */}
+        <div className="md:pl-64 flex flex-col min-h-screen">
+          <UserHeader 
+            title="Overview"
+            onMenuClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+          />
+          <main className="flex-1 p-6">
+            {children}
+          </main>
+        </div>
       </div>
-    </div>
+    </CompanyProvider>
   )
 }

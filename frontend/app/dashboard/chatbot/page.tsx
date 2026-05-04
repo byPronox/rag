@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,8 +11,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Save, Code, Bot, MessageSquare, Sparkles, Store, User, Send, Check } from "lucide-react"
 
-// Importaciones actualizadas para la arquitectura Multi-Compañía
+// Importaciones actualizadas
 import { getCompanyConfig, updateCompanyConfig, getModels, AIModel, CompanyConfig } from "@/lib/api"
+// Importamos el hook del contexto de compañía
+import { useCompany } from "@/lib/company-context"
 
 const ICONS = {
   Bot: Bot,
@@ -36,9 +38,8 @@ export default function ChatbotConfigPage() {
   const [copied, setCopied] = useState(false)
   const [availableModels, setAvailableModels] = useState<AIModel[]>([])
   
-  // ID temporal para que compile (simulando Gudyz Ecuador). 
-  // En el futuro, esto vendrá del estado global del Navbar.
-  const activeCompanyId = "2" 
+  // Extraemos el estado global de la compañía activa
+  const { activeCompany, isLoadingCompanies } = useCompany()
 
   const [config, setConfig] = useState({
     welcome_message: "Hello! I'm your AI shopping assistant. How can I help you?",
@@ -46,15 +47,19 @@ export default function ChatbotConfigPage() {
     selected_llm_model: "",
     theme_color: "#8b5cf6",
     chat_icon: "Bot",
-    system_api_key: "your_master_api_key_here" // Este dato ahora vendrá del perfil del usuario, no de la compañía
+    system_api_key: "your_master_api_key_here"
   })
 
+  // Dependemos de activeCompany, si el usuario cambia de compañía, esto se vuelve a ejecutar
   useEffect(() => {
+    if (isLoadingCompanies || !activeCompany) return;
+
     const fetchData = async () => {
+      setIsLoading(true)
       try {
         const [modelsData, companyConf] = await Promise.all([
           getModels(),
-          getCompanyConfig(activeCompanyId) // Petición específica a la compañía
+          getCompanyConfig(activeCompany.company_id)
         ])
 
         if (modelsData) {
@@ -78,15 +83,16 @@ export default function ChatbotConfigPage() {
       }
     }
     fetchData()
-  }, [])
+  }, [activeCompany, isLoadingCompanies])
 
   const handleSave = async () => {
+    if (!activeCompany) return;
+
     setIsSaving(true)
     try {
-      // Extraemos la api_key porque el endpoint de updateCompanyConfig no la espera
       const { system_api_key, ...configToSave } = config;
       
-      await updateCompanyConfig(activeCompanyId, configToSave as Partial<CompanyConfig>)
+      await updateCompanyConfig(activeCompany.company_id, configToSave as Partial<CompanyConfig>)
       alert("Chatbot configuration saved successfully!")
     } catch (error) {
       alert("Error saving configuration.")
@@ -101,13 +107,12 @@ export default function ChatbotConfigPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Generador del Script actualizado con companyId
   const embedCode = `
 <!-- Start RAG SaaS Chatbot -->
 <script>
   window.RAG_CONFIG = {
     apiKey: "${config.system_api_key}",
-    companyId: "${activeCompanyId}",
+    companyId: "${activeCompany?.company_id || 'ERROR_NO_COMPANY'}",
     color: "${config.theme_color}",
     icon: "${config.chat_icon}",
     apiUrl: "${process.env.NEXT_PUBLIC_RAG_API_URL}"
@@ -119,8 +124,20 @@ export default function ChatbotConfigPage() {
 
   const SelectedIcon = ICONS[config.chat_icon as keyof typeof ICONS] || Bot
 
-  if (isLoading) {
+  if (isLoading || isLoadingCompanies) {
     return <div className="flex justify-center items-center min-h-[50vh]"><Spinner className="w-8 h-8 text-primary" /></div>
+  }
+
+  if (!activeCompany) {
+    return (
+      <div className="flex flex-col justify-center items-center min-h-[50vh] space-y-4">
+        <Store className="w-16 h-16 text-muted-foreground opacity-50" />
+        <h2 className="text-xl font-semibold">No Companies Found</h2>
+        <p className="text-muted-foreground text-center max-w-md">
+          You need to sync at least one company from your Odoo panel before configuring the chatbot.
+        </p>
+      </div>
+    )
   }
 
   return (
@@ -128,7 +145,7 @@ export default function ChatbotConfigPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Chatbot Configuration</h1>
-          <p className="text-muted-foreground mt-1">Customize your assistant's behavior, appearance, and get your embed code.</p>
+          <p className="text-muted-foreground mt-1">Configure {activeCompany.name}'s behavior, appearance, and get your embed code.</p>
         </div>
         <div className="flex gap-3">
           <Dialog>
@@ -351,3 +368,4 @@ export default function ChatbotConfigPage() {
     </div>
   )
 }
+```</CompanyProvider>
