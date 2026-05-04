@@ -11,10 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Save, Code, Bot, MessageSquare, Sparkles, Store, User, Send, Check } from "lucide-react"
 
-// Importa tus funciones de API (asegúrate de que getUserConfig y updateUserConfig manejen theme_color y chat_icon)
-import { getUserConfig, updateUserConfig, getModels, AIModel, UserConfig } from "@/lib/api"
+// Importaciones actualizadas para la arquitectura Multi-Compañía
+import { getCompanyConfig, updateCompanyConfig, getModels, AIModel, CompanyConfig } from "@/lib/api"
 
-// Diccionario de íconos disponibles para el usuario
 const ICONS = {
   Bot: Bot,
   MessageSquare: MessageSquare,
@@ -22,7 +21,6 @@ const ICONS = {
   Store: Store,
 }
 
-// Colores predeterminados elegantes
 const PRESET_COLORS = [
   { name: "Purple (Default)", value: "#8b5cf6" },
   { name: "Blue", value: "#3b82f6" },
@@ -38,36 +36,40 @@ export default function ChatbotConfigPage() {
   const [copied, setCopied] = useState(false)
   const [availableModels, setAvailableModels] = useState<AIModel[]>([])
   
+  // ID temporal para que compile (simulando Gudyz Ecuador). 
+  // En el futuro, esto vendrá del estado global del Navbar.
+  const activeCompanyId = "2" 
+
   const [config, setConfig] = useState({
     welcome_message: "Hello! I'm your AI shopping assistant. How can I help you?",
     system_prompt: "You are a helpful sales assistant...",
     selected_llm_model: "",
     theme_color: "#8b5cf6",
     chat_icon: "Bot",
-    system_api_key: "dummy_key_for_preview"
+    system_api_key: "your_master_api_key_here" // Este dato ahora vendrá del perfil del usuario, no de la compañía
   })
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [modelsData, userConf] = await Promise.all([
+        const [modelsData, companyConf] = await Promise.all([
           getModels(),
-          getUserConfig()
+          getCompanyConfig(activeCompanyId) // Petición específica a la compañía
         ])
 
         if (modelsData) {
           setAvailableModels(modelsData.filter(m => m.is_active && m.type === "llm"))
         }
 
-        if (userConf) {
-          setConfig({
-            welcome_message: userConf.welcome_message || config.welcome_message,
-            system_prompt: userConf.system_prompt || config.system_prompt,
-            selected_llm_model: userConf.selected_llm_model || "",
-            theme_color: (userConf as any).theme_color || "#8b5cf6",
-            chat_icon: (userConf as any).chat_icon || "Bot",
-            system_api_key: userConf.system_api_key || ""
-          })
+        if (companyConf) {
+          setConfig(prev => ({
+            ...prev,
+            welcome_message: companyConf.welcome_message || prev.welcome_message,
+            system_prompt: companyConf.system_prompt || prev.system_prompt,
+            selected_llm_model: companyConf.selected_llm_model || "",
+            theme_color: companyConf.theme_color || "#8b5cf6",
+            chat_icon: companyConf.chat_icon || "Bot",
+          }))
         }
       } catch (error) {
         console.error("Error loading config:", error)
@@ -81,7 +83,10 @@ export default function ChatbotConfigPage() {
   const handleSave = async () => {
     setIsSaving(true)
     try {
-      await updateUserConfig(config as Partial<UserConfig>)
+      // Extraemos la api_key porque el endpoint de updateCompanyConfig no la espera
+      const { system_api_key, ...configToSave } = config;
+      
+      await updateCompanyConfig(activeCompanyId, configToSave as Partial<CompanyConfig>)
       alert("Chatbot configuration saved successfully!")
     } catch (error) {
       alert("Error saving configuration.")
@@ -96,12 +101,13 @@ export default function ChatbotConfigPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  // Generador del Script de Integración
+  // Generador del Script actualizado con companyId
   const embedCode = `
 <!-- Start RAG SaaS Chatbot -->
 <script>
   window.RAG_CONFIG = {
     apiKey: "${config.system_api_key}",
+    companyId: "${activeCompanyId}",
     color: "${config.theme_color}",
     icon: "${config.chat_icon}",
     apiUrl: "${process.env.NEXT_PUBLIC_RAG_API_URL}"
