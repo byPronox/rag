@@ -24,6 +24,7 @@ export const ADMIN_ENDPOINTS = {
 
 // User endpoints -> Usan el Core API (Microservicio 2)
 export const USER_ENDPOINTS = {
+  companies: `${CORE_API_URL}/api/v1/user/companies`,
   config: `${CORE_API_URL}/api/v1/user/config`,
   models: `${CORE_API_URL}/api/v1/user/models`,
   metrics: `${CORE_API_URL}/api/v1/user/metrics`,
@@ -235,30 +236,45 @@ export async function updateAdminSettings(data: Partial<GlobalSettings>): Promis
 export async function regenerateUserApiKey(userId: number): Promise<{ message: string, api_key: string }> {
   return apiPost<{ message: string, api_key: string }>(`${ADMIN_ENDPOINTS.users}/${userId}/api-key`, {})
 }
-
 // ==========================================
-// USER-SPECIFIC FUNCTIONS
+// USER & COMPANY-SPECIFIC FUNCTIONS
 // ==========================================
 
-export interface UserConfig {
+export interface Company {
+  platform: string
+  company_id: string
+  name: string
+}
+
+export interface CompanyConfig {
   id: number
-  user_id: number
-  system_api_key: string
+  company_id: string
   selected_embedding_model: string
   selected_llm_model: string
   welcome_message: string
   system_prompt: string
+  theme_color: string
+  chat_icon: string
   is_active: boolean
 }
 
-export async function getUserConfig(): Promise<UserConfig> {
-  return apiGet<UserConfig>(USER_ENDPOINTS.config)
+// NUEVO: Obtener la lista de compañías a las que tiene acceso el inquilino
+export async function getUserCompanies(): Promise<Company[]> {
+  return apiGet<Company[]>(USER_ENDPOINTS.companies)
 }
 
-export async function updateUserConfig(config: Partial<UserConfig>): Promise<UserConfig> {
-  return apiPut<UserConfig>(USER_ENDPOINTS.config, config as Record<string, unknown>)
+// ACTUALIZADO: Pide la configuración de una compañía específica
+export async function getCompanyConfig(companyId: string): Promise<CompanyConfig> {
+  return apiGet<CompanyConfig>(`${USER_ENDPOINTS.config}/${companyId}`)
 }
 
+// ACTUALIZADO: Actualiza la configuración de una compañía específica
+export async function updateCompanyConfig(companyId: string, config: Partial<CompanyConfig>): Promise<{message: string}> {
+  return apiPut<{message: string}>(`${USER_ENDPOINTS.config}/${companyId}`, config as Record<string, unknown>)
+}
+
+// Historiales (Estos también requerirán filtrar por company_id en el backend más adelante, 
+// pero por ahora mantenemos las interfaces como están para que no se rompan tus tablas)
 export interface ChatMessage {
   id: number
   session_id: string
