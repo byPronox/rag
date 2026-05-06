@@ -12,7 +12,7 @@
     }
 
     // 2. URL y Configuración de Estilo
-    let RAG_API_URL = localConfig.apiUrl || "https://microservice-3-production.up.railway.app"; 
+    let RAG_API_URL = localConfig.apiUrl; 
     if (RAG_API_URL && !RAG_API_URL.startsWith('http')) {
         RAG_API_URL = 'https://' + RAG_API_URL;
     }
