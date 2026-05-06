@@ -66,7 +66,7 @@ export function ChatWidget() {
     setIsTyping(true)
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_RAG_API_URL || 'https://microservice-3-production.up.railway.app'}/api/v1/chat/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_RAG_API_URL}/api/v1/chat/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
