@@ -1,11 +1,12 @@
 "use client"
 
 import Link from "next/link"
-import { Store } from "lucide-react"
+import { Store, User } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useCompany } from "@/lib/company-context"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { UserMenu } from "@/components/user-menu"
+import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 export function DemoHeader() {
   const { user } = useAuth()
@@ -62,12 +63,18 @@ export function DemoHeader() {
         )}
       </div>
       
-      {/* Right Section: User Menu */}
+      {/* Right Section: User Menu / Login Avatar */}
       <div className="flex items-center gap-2 text-primary">
         {user ? (
           <UserMenu />
         ) : (
-          <Link href="/login" className="text-sm font-medium hover:underline">Iniciar Sesión</Link>
+          <Link href="/login" className="hover:opacity-80 transition-opacity" title="Iniciar Sesión">
+            <Avatar className="h-8 w-8 border border-primary/20 transition-transform hover:scale-105">
+              <AvatarFallback className="bg-primary text-primary-foreground">
+                <User className="w-4 h-4" />
+              </AvatarFallback>
+            </Avatar>
+          </Link>
         )}
       </div>
     </header>
