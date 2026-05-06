@@ -1,11 +1,13 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Bot, MessageSquare, Sparkles, Store, User, Send, X } from "lucide-react"
+import { Bot, MessageSquare, Sparkles, Store, User, Send, X, Lock } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
 import { useCompany } from "@/lib/company-context"
 import { getCompanyConfig } from "@/lib/api"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import Link from "next/link"
 
 const ICONS = { Bot, MessageSquare, Sparkles, Store }
 
@@ -16,7 +18,9 @@ interface Message {
 }
 
 export function ChatWidget() {
+  const { isAuthenticated } = useAuth()
   const { activeCompany } = useCompany()
+  
   const [isOpen, setIsOpen] = useState(false)
   const [input, setInput] = useState("")
   const [messages, setMessages] = useState<Message[]>([])
@@ -32,8 +36,9 @@ export function ChatWidget() {
 
   const [sessionId] = useState(`web_demo_${Date.now()}`)
 
+  // Setup initial state based on authentication and active company
   useEffect(() => {
-    if (activeCompany) {
+    if (isAuthenticated && activeCompany) {
       getCompanyConfig(activeCompany.company_id).then(data => {
         if (data) {
           setConfig(prev => ({
@@ -46,12 +51,15 @@ export function ChatWidget() {
         }
       }).catch(console.error)
     } else {
-      // Modo Demo
-      setMessages([{ id: 'welcome', text: "Hello! I'm the Demo AI. Try asking me for 'a minimalist desk'.", isUser: false }])
-      // Reset color to default if logged out
+      // Unauthenticated Mode
+      setMessages([{ 
+        id: 'welcome', 
+        text: "Hello! To access full AI chat features and search real catalogs, please contact us for access or log in to your account.", 
+        isUser: false 
+      }])
       setConfig(prev => ({ ...prev, color: "#8b5cf6", icon: "Bot" }))
     }
-  }, [activeCompany])
+  }, [activeCompany, isAuthenticated])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -60,29 +68,15 @@ export function ChatWidget() {
   const SelectedIcon = ICONS[config.icon as keyof typeof ICONS] || Bot
 
   const handleSend = async () => {
-    if (!input.trim()) return
+    if (!input.trim() || !isAuthenticated || !activeCompany) return
     const text = input.trim()
     setInput("")
     
     setMessages(prev => [...prev, { id: Date.now().toString(), text, isUser: true }])
     setIsTyping(true)
 
-    // Lógica para Modo Demo (Usuario sin loguear o sin compañía)
-    if (!activeCompany) {
-      setTimeout(() => {
-        setMessages(prev => [...prev, { 
-          id: Date.now().toString(), 
-          text: "I'm currently in demo mode! Please log in and select your company to connect me to your real product catalog.", 
-          isUser: false 
-        }])
-        setIsTyping(false)
-      }, 1000)
-      return
-    }
-
-    // Búsqueda Real
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_RAG_API_URL}/api/v1/chat/`, {
+      const res = await fetch(`${process.env.NEXT_PUBLIC_RAG_API_URL || 'https://microservice-3-production.up.railway.app'}/api/v1/chat/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -103,8 +97,6 @@ export function ChatWidget() {
     }
   }
 
-  // ELIMINADA LA RESTRICCIÓN: if (!activeCompany) return null;
-
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
       {isOpen && (
@@ -112,7 +104,9 @@ export function ChatWidget() {
           <div className="p-4 flex justify-between items-center text-white shadow-sm" style={{ backgroundColor: config.color }}>
             <div className="flex items-center gap-2">
               <SelectedIcon className="w-5 h-5" />
-              <span className="font-semibold text-sm">{activeCompany ? `${activeCompany.name} AI` : "Demo Assistant"}</span>
+              <span className="font-semibold text-sm">
+                {isAuthenticated && activeCompany ? `${activeCompany.name} AI` : "Demo Assistant"}
+              </span>
             </div>
             <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors"><X className="w-5 h-5" /></button>
           </div>
@@ -142,18 +136,30 @@ export function ChatWidget() {
           </div>
 
           <div className="p-3 border-t border-border bg-background">
-            <div className="flex gap-2">
-              <Input 
-                value={input} 
-                onChange={e => setInput(e.target.value)} 
-                onKeyDown={e => e.key === 'Enter' && handleSend()}
-                placeholder="Test your AI..." 
-                className="flex-1 rounded-full text-sm h-10" 
-              />
-              <Button onClick={handleSend} disabled={!input.trim()} size="icon" className="h-10 w-10 rounded-full text-white shadow-md hover:scale-105 transition-transform" style={{ backgroundColor: config.color }}>
-                <Send className="w-4 h-4" />
-              </Button>
-            </div>
+            {/* Conditional Input Rendering based on Authentication */}
+            {isAuthenticated ? (
+              <div className="flex gap-2">
+                <Input 
+                  value={input} 
+                  onChange={e => setInput(e.target.value)} 
+                  onKeyDown={e => e.key === 'Enter' && handleSend()}
+                  placeholder="Ask anything..." 
+                  className="flex-1 rounded-full text-sm h-10" 
+                  disabled={!activeCompany}
+                />
+                <Button onClick={handleSend} disabled={!input.trim() || !activeCompany} size="icon" className="h-10 w-10 rounded-full text-white shadow-md hover:scale-105 transition-transform" style={{ backgroundColor: config.color }}>
+                  <Send className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex w-full">
+                <Link href="/login" className="w-full">
+                  <Button className="w-full rounded-full h-10 shadow-sm" style={{ backgroundColor: config.color }}>
+                    <Lock className="w-4 h-4 mr-2" /> Log In to Chat
+                  </Button>
+                </Link>
+              </div>
+            )}
           </div>
         </div>
       )}

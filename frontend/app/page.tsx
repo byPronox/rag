@@ -18,28 +18,38 @@ export default function DemoPage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
+  const [showAuthCTA, setShowAuthCTA] = useState(false)
 
   const handleSearch = async (query: string) => {
     setIsSearching(true)
     setHasSearched(true)
+    setShowAuthCTA(false)
 
-    // Si no está logueado o no ha seleccionado compañía, hacemos una "Demo Search"
-    if (!isAuthenticated || !activeCompany) {
+    // Unauthenticated Flow: Show skeleton, then the Login CTA
+    if (!isAuthenticated) {
       setTimeout(() => {
         setIsSearching(false)
-        setHasSearched(false) // Lo devolvemos a false para que se sigan viendo los demoProducts
-        alert("¡Estás en modo demostración! Para buscar en tu catálogo real con IA, inicia sesión y selecciona tu compañía.")
-      }, 1500)
+        setShowAuthCTA(true)
+      }, 1500) // 1.5s Shimmer effect delay
       return
     }
 
-    // Búsqueda Real en el Microservicio 3
+    // Authenticated Flow but no company selected
+    if (!activeCompany) {
+      setTimeout(() => {
+        setIsSearching(false)
+        alert("Please select a company from the top menu to test your real catalog.")
+      }, 500)
+      return
+    }
+
+    // Real Search Flow (Logged in & Company selected)
     try {
-      const apiKey = "your_master_api_key_here"; // Reemplaza por la lógica para traer la API Key
+      const apiKey = "your_master_api_key_here"; // Replace with real logic
       const results = await testSemanticSearch(query, activeCompany.company_id, apiKey)
       setSearchResults(results)
     } catch (error) {
-      console.error("[RAG Error] Búsqueda fallida:", error)
+      console.error("[RAG Error] Search failed:", error)
       setSearchResults([])
     } finally {
       setIsSearching(false)
@@ -65,6 +75,7 @@ export default function DemoPage() {
           products={searchResults} 
           isSearching={isSearching} 
           hasSearched={hasSearched} 
+          showAuthCTA={showAuthCTA}
         />
       </main>
       

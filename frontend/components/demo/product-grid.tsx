@@ -2,9 +2,12 @@
 
 import { SearchResult } from "@/lib/api"
 import { ProductCard, type Product } from "./product-card"
-import { Box } from "lucide-react"
+import { Box, LockKeyhole, ArrowRight, ImageIcon } from "lucide-react"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 
-// Demo products originales
 const demoProducts: Product[] = [
   {
     id: "1",
@@ -46,67 +49,161 @@ const demoProducts: Product[] = [
   }
 ]
 
+// 1. Shimmer Effect Skeleton Card
+function SkeletonCard({ isFeatured }: { isFeatured?: boolean }) {
+  return (
+    <Card className="overflow-hidden h-full flex flex-col border-[var(--outline-variant)]">
+      <div className={`${isFeatured ? 'h-64' : 'h-48'} w-full bg-muted/50 animate-pulse relative`}>
+        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-[shimmer_1.5s_infinite]" />
+      </div>
+      <CardContent className="p-5 flex flex-col flex-1 gap-3">
+        <div className="h-5 w-3/4 bg-muted/50 animate-pulse rounded" />
+        <div className="h-4 w-1/2 bg-muted/50 animate-pulse rounded mb-2" />
+        <div className="flex gap-2">
+          <div className="h-4 w-16 bg-muted/50 animate-pulse rounded" />
+          <div className="h-4 w-20 bg-muted/50 animate-pulse rounded" />
+        </div>
+        <div className="mt-auto pt-4 border-t border-border flex justify-between items-center">
+          <div className="h-6 w-16 bg-muted/50 animate-pulse rounded" />
+          <div className="h-4 w-20 bg-muted/50 animate-pulse rounded" />
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function ProductCardItem({ product, isFeatured }: { product: SearchResult, isFeatured: boolean }) {
+  return (
+    <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 h-full flex flex-col group border-[var(--outline-variant)]">
+      <div className={`${isFeatured ? 'h-64' : 'h-48'} w-full bg-muted/30 border-b border-border relative overflow-hidden flex items-center justify-center`}>
+        {product.image_url ? (
+          <img 
+            src={product.image_url} 
+            alt={product.name} 
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 bg-white"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
+          />
+        ) : (
+          <ImageIcon className="w-12 h-12 text-muted-foreground opacity-20" />
+        )}
+        {isFeatured && (
+          <Badge className="absolute top-4 left-4 bg-primary text-white shadow-md">
+            ✨ Top Match
+          </Badge>
+        )}
+      </div>
+      <CardContent className="p-5 flex flex-col flex-1">
+        <h4 className={`font-semibold text-[var(--on-surface)] ${isFeatured ? 'text-xl mb-2' : 'text-base line-clamp-2 mb-1'}`} title={product.name}>
+          {product.name}
+        </h4>
+        <div className="mb-4">
+          <Badge variant="outline" className="text-[10px] uppercase text-muted-foreground bg-[var(--surface-container-lowest)]">
+            {product.category || 'General'}
+          </Badge>
+          <span className="text-xs text-muted-foreground font-mono ml-2">SKU: {product.sku || 'N/A'}</span>
+        </div>
+        <div className="mt-auto pt-4 border-t border-border flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-green-600 font-bold text-lg">${product.price.toFixed(2)}</span>
+          <span className="flex items-center gap-1.5 text-muted-foreground text-sm font-medium">
+            <Package className="w-4 h-4" /> {product.stock} in stock
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 interface ProductGridProps {
   products?: SearchResult[]
   isSearching?: boolean
   hasSearched?: boolean
+  showAuthCTA?: boolean
 }
 
-export function ProductGrid({ products = [], isSearching = false, hasSearched = false }: ProductGridProps) {
+export function ProductGrid({ products = [], isSearching = false, hasSearched = false, showAuthCTA = false }: ProductGridProps) {
+  
+  // 1. LOADING STATE: Shimmer Skeleton Grid
   if (isSearching) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 animate-pulse">
-        <div className="w-12 h-12 rounded-full border-4 border-primary border-t-transparent animate-spin mb-4" />
-        <p className="text-muted-foreground font-medium">Buscando en la base vectorial...</p>
+      <section className="grid grid-cols-1 md:grid-cols-12 gap-6">
+        <div className="col-span-1 md:col-span-8"><SkeletonCard isFeatured={true} /></div>
+        <div className="col-span-1 md:col-span-4"><SkeletonCard /></div>
+        <div className="col-span-1 md:col-span-4"><SkeletonCard /></div>
+        <div className="col-span-1 md:col-span-4"><SkeletonCard /></div>
+        <div className="col-span-1 md:col-span-4"><SkeletonCard /></div>
+      </section>
+    )
+  }
+
+  // 2. UNAUTHENTICATED CTA STATE
+  if (showAuthCTA) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 px-6 text-center border border-border rounded-3xl bg-[var(--surface-container-lowest)] shadow-sm animate-in zoom-in-95 duration-500 max-w-3xl mx-auto w-full">
+        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-6">
+          <LockKeyhole className="w-8 h-8 text-primary" />
+        </div>
+        <h3 className="text-2xl font-bold text-foreground mb-3">Experience Full Power</h3>
+        <p className="text-muted-foreground mb-8 max-w-lg leading-relaxed">
+          To complete the experience and connect our AI engine with a real product catalog, you need an authorized account.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Link href="/login">
+            <Button size="lg" className="rounded-full px-8 h-12 text-md shadow-md hover:scale-105 transition-transform">
+              Login to RAG Admin <ArrowRight className="ml-2 w-4 h-4" />
+            </Button>
+          </Link>
+          <Button size="lg" variant="outline" className="rounded-full px-8 h-12 text-md">
+            Contact us for access
+          </Button>
+        </div>
       </div>
     )
   }
 
+  // 3. NO RESULTS STATE
   if (hasSearched && products.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center border border-dashed border-border rounded-2xl bg-muted/20">
         <Box className="h-16 w-16 text-muted-foreground mb-4 opacity-50" />
-        <h3 className="text-xl font-medium text-foreground">Sin coincidencias semánticas</h3>
-        <p className="text-muted-foreground mt-2 max-w-md">La IA no encontró productos relacionados con tu búsqueda en el catálogo actual.</p>
+        <h3 className="text-xl font-medium text-foreground">No semantic matches found</h3>
+        <p className="text-muted-foreground mt-2 max-w-md">The AI couldn't find products matching your query in the current catalog.</p>
       </div>
     )
   }
 
-  // Determinamos qué productos mostrar (Demo vs Base de datos real)
-  let displayProducts: Product[] = [];
+  // 4. RENDER RESULTS OR DEMO
+  let displayProducts: Product[] | SearchResult[] = [];
+  let isDemo = false;
 
   if (hasSearched && products.length > 0) {
-    // Transformamos la respuesta de la API (SearchResult) al formato visual (Product)
-    displayProducts = products.map((p, index) => ({
-      id: p.variant_id.toString(),
-      name: p.name,
-      price: p.price,
-      description: `Stock disponible: ${p.stock}`, // Puedes enriquecer esto si el backend manda descripciones
-      image: p.image_url || "", 
-      tags: p.category ? [p.category, `SKU: ${p.sku}`] : [`SKU: ${p.sku}`],
-      isTopMatch: index === 0, // El primer resultado es el Top Match
-      matchScore: index === 0 ? 98 : undefined
-    }));
+    displayProducts = products;
   } else {
-    // Si no ha buscado nada, muestra la demostración
-    displayProducts = demoProducts;
+    displayProducts = demoProducts as any; 
+    isDemo = true;
   }
 
-  const [featuredProduct, ...secondaryProducts] = displayProducts;
+  const featuredProduct = displayProducts[0];
+  const secondaryProducts = displayProducts.slice(1);
 
   return (
     <section className="grid grid-cols-1 md:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4">
-      {/* Featured Item (Spans 8 cols) */}
       {featuredProduct && (
         <div className="col-span-1 md:col-span-8">
-          <ProductCard product={featuredProduct} variant="featured" />
+          {isDemo ? (
+             <ProductCard product={featuredProduct as Product} variant="featured" />
+          ) : (
+             <ProductCardItem product={featuredProduct as SearchResult} isFeatured={true} />
+          )}
         </div>
       )}
       
-      {/* Secondary Items (Span 4 cols each) */}
-      {secondaryProducts.map((product) => (
-        <div key={product.id} className="col-span-1 md:col-span-4">
-          <ProductCard product={product} />
+      {secondaryProducts.map((product: any) => (
+        <div key={product.id || product.variant_id} className="col-span-1 md:col-span-4">
+          {isDemo ? (
+            <ProductCard product={product as Product} />
+          ) : (
+            <ProductCardItem product={product as SearchResult} isFeatured={false} />
+          )}
         </div>
       ))}
     </section>
