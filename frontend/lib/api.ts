@@ -296,3 +296,41 @@ export interface SearchQuery {
 export async function getSearchHistory(): Promise<SearchQuery[]> {
   return apiGet<SearchQuery[]>(USER_ENDPOINTS.searchHistory)
 }
+
+// ==========================================
+// RAG SEMANTIC SEARCH
+// ==========================================
+
+export interface SearchResult {
+  variant_id: number;
+  sku: string;
+  name: string;
+  price: number;
+  stock: number;
+  category: string;
+  image_url?: string;
+}
+
+export async function testSemanticSearch(query: string, companyId: string, apiKey: string): Promise<SearchResult[]> {
+  const url = `${RAG_ENDPOINTS.search}`; // Asegúrate de tener RAG_ENDPOINTS importado/definido
+  
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { 
+      "Content-Type": "application/json",
+      "x-api-key": apiKey 
+    },
+    body: JSON.stringify({ query: query, company_id: companyId }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Error en la búsqueda semántica");
+  }
+  
+  const data = await response.json();
+  return data.results;
+}
+
+export async function getUserApiKey(): Promise<{ system_api_key: string }> {
+  return apiGet<{ system_api_key: string }>(`${USER_ENDPOINTS.config}/../api-key-endpoint`); 
+}
