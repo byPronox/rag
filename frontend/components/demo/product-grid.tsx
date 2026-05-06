@@ -2,7 +2,8 @@
 
 import { SearchResult } from "@/lib/api"
 import { ProductCard, type Product } from "./product-card"
-import { Box, LockKeyhole, ArrowRight, ImageIcon } from "lucide-react"
+// ADDED "Package" TO THE IMPORT LIST BELOW
+import { Box, LockKeyhole, ArrowRight, ImageIcon, Package } from "lucide-react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
@@ -49,7 +50,6 @@ const demoProducts: Product[] = [
   }
 ]
 
-// 1. Shimmer Effect Skeleton Card
 function SkeletonCard({ isFeatured }: { isFeatured?: boolean }) {
   return (
     <Card className="overflow-hidden h-full flex flex-col border-[var(--outline-variant)]">
@@ -122,7 +122,6 @@ interface ProductGridProps {
 
 export function ProductGrid({ products = [], isSearching = false, hasSearched = false, showAuthCTA = false }: ProductGridProps) {
   
-  // 1. LOADING STATE: Shimmer Skeleton Grid
   if (isSearching) {
     return (
       <section className="grid grid-cols-1 md:grid-cols-12 gap-6">
@@ -135,7 +134,6 @@ export function ProductGrid({ products = [], isSearching = false, hasSearched = 
     )
   }
 
-  // 2. UNAUTHENTICATED CTA STATE
   if (showAuthCTA) {
     return (
       <div className="flex flex-col items-center justify-center py-20 px-6 text-center border border-border rounded-3xl bg-[var(--surface-container-lowest)] shadow-sm animate-in zoom-in-95 duration-500 max-w-3xl mx-auto w-full">
@@ -160,7 +158,6 @@ export function ProductGrid({ products = [], isSearching = false, hasSearched = 
     )
   }
 
-  // 3. NO RESULTS STATE
   if (hasSearched && products.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center border border-dashed border-border rounded-2xl bg-muted/20">
@@ -171,7 +168,6 @@ export function ProductGrid({ products = [], isSearching = false, hasSearched = 
     )
   }
 
-  // 4. RENDER RESULTS OR DEMO
   let displayProducts: Product[] | SearchResult[] = [];
   let isDemo = false;
 
