@@ -195,7 +195,7 @@
         }
     }
 
-    // 10. Renderizado de Resultados en el Dropdown
+    // 10. Renderizado de Resultados en el Dropdown (CORREGIDO)
     function renderResults(results) {
         if (results.length === 0) {
             resultsContainer.innerHTML = `<div class="rag-state-msg">No semantic matches found. Try another phrase.</div>`;
@@ -204,9 +204,11 @@
 
         let html = '';
         results.forEach(item => {
-            // Manejar si hay imagen o no
             const imgHtml = item.image_url 
-                ? `<img src="${item.image_url}" alt="Product" onerror="this.outerHTML='${icons.ImagePlace}'" />` 
+                ? `<div style="position:relative; width:100%; height:100%; display:flex; align-items:center; justify-content:center;">
+                       <div style="position:absolute; width:24px; height:24px; opacity:0.5;">${icons.ImagePlace}</div>
+                       <img src="${item.image_url}" alt="${item.name}" style="position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; z-index:10; background:white;" onerror="this.style.display='none'" />
+                   </div>` 
                 : icons.ImagePlace;
 
             html += `
