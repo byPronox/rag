@@ -1,55 +1,102 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, Package, Tag, Box, Store, AlertCircle, ImageIcon } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Spinner } from "@/components/ui/spinner"
-import { Badge } from "@/components/ui/badge"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Save, Code, Search, Store, Check, Sparkles, ShoppingBag, ArrowRight } from "lucide-react"
 
-// Hooks y Helpers
+// Importaciones de API y Contexto Multi-Compañía
+import { getCompanyConfig, updateCompanyConfig, CompanyConfig } from "@/lib/api"
 import { useCompany } from "@/lib/company-context"
-import { testSemanticSearch, SearchResult } from "@/lib/api"
 
-export default function SemanticSearchPage() {
-  const { activeCompany, isLoadingCompanies } = useCompany()
+const PRESET_COLORS = [
+  { name: "Purple (Default)", value: "#8b5cf6" },
+  { name: "Blue", value: "#3b82f6" },
+  { name: "Emerald", value: "#10b981" },
+  { name: "Rose", value: "#f43f5e" },
+  { name: "Orange", value: "#f97316" },
+  { name: "Slate", value: "#64748b" },
+]
+
+export default function SemanticSearchConfigPage() {
+  const [isLoading, setIsLoading] = useState(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [isSearchFocused, setIsSearchFocused] = useState(true) // Controla el estado del preview
   
-  const [query, setQuery] = useState("")
-  const [results, setResults] = useState<SearchResult[]>([])
-  const [isSearching, setIsSearching] = useState(false)
-  const [hasSearched, setHasSearched] = useState(false)
-  const [apiKey, setApiKey] = useState<string>("") // Necesitamos la llave para MS3
+  // Extraemos el estado global de la compañía activa
+  const { activeCompany, isLoadingCompanies } = useCompany()
 
-  // Efecto temporal: En un entorno real, debes traer la `system_api_key` del usuario
-  // desde el Microservicio 2. Por ahora simularemos que la obtenemos.
+  const [config, setConfig] = useState({
+    theme_color: "#8b5cf6",
+    system_api_key: "your_master_api_key_here" // Idealmente, traer del contexto de Auth/User
+  })
+
+  // Cargar la configuración de la compañía seleccionada
   useEffect(() => {
-    // Aquí idealmente haces un fetch a un endpoint como GET /api/v1/user/me/api-key
-    // Para no bloquearte, usaremos un mock o asume que la sacas de tu auth context
-    setApiKey("your_master_api_key_here") 
-  }, [])
+    if (isLoadingCompanies || !activeCompany) return;
 
-  const handleSearch = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    if (!query.trim() || !activeCompany || !apiKey) return;
+    const fetchData = async () => {
+      setIsLoading(true)
+      try {
+        const companyConf = await getCompanyConfig(activeCompany.company_id)
+        if (companyConf) {
+          setConfig(prev => ({
+            ...prev,
+            theme_color: companyConf.theme_color || "#8b5cf6",
+          }))
+        }
+      } catch (error) {
+        console.error("Error loading config:", error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    fetchData()
+  }, [activeCompany, isLoadingCompanies])
 
-    setIsSearching(true)
-    setHasSearched(true)
-    
+  const handleSave = async () => {
+    if (!activeCompany) return;
+
+    setIsSaving(true)
     try {
-      // Llamada al Microservicio 3 usando el company_id activo
-      const data = await testSemanticSearch(query, activeCompany.company_id, apiKey)
-      setResults(data)
+      // Guardamos el color (que se comparte con el chatbot para consistencia de marca)
+      await updateCompanyConfig(activeCompany.company_id, { theme_color: config.theme_color } as Partial<CompanyConfig>)
+      alert("Search Widget configuration saved successfully!")
     } catch (error) {
-      console.error("Error searching:", error)
-      setResults([])
+      alert("Error saving configuration.")
     } finally {
-      setIsSearching(false)
+      setIsSaving(false)
     }
   }
 
-  // Pantalla de carga inicial o sin compañía
-  if (isLoadingCompanies) {
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  // Generador del Script de Búsqueda (Similar al chatbot pero para inyectar una barra de búsqueda)
+  const embedCode = `
+<!-- Start RAG Semantic Search Bar -->
+<div id="rag-search-bar-container"></div>
+<script>
+  window.RAG_SEARCH_CONFIG = {
+    apiKey: "${config.system_api_key}",
+    companyId: "${activeCompany?.company_id || 'ERROR_NO_COMPANY'}",
+    color: "${config.theme_color}",
+    apiUrl: "${process.env.NEXT_PUBLIC_RAG_API_URL}"
+  };
+</script>
+<script src="https://rag-frontend-tan.vercel.app/search-widget.js" async></script>
+<!-- End RAG Semantic Search Bar -->
+  `.trim()
+
+  if (isLoading || isLoadingCompanies) {
     return <div className="flex justify-center items-center min-h-[50vh]"><Spinner className="w-8 h-8 text-primary" /></div>
   }
 
@@ -59,128 +106,191 @@ export default function SemanticSearchPage() {
         <Store className="w-16 h-16 text-muted-foreground opacity-50" />
         <h2 className="text-xl font-semibold">No Companies Found</h2>
         <p className="text-muted-foreground text-center max-w-md">
-          Please select a company from the top navigation to test semantic search.
+          You need to sync at least one company from your Odoo panel before configuring the search widget.
         </p>
       </div>
     )
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6">
-      {/* Header Section */}
-      <div>
-        <h1 className="text-2xl font-semibold text-foreground">Semantic Search Tester</h1>
-        <p className="text-muted-foreground mt-1">
-          Test how the AI retrieves products from <strong className="text-foreground">{activeCompany.name}</strong>'s catalog.
-        </p>
+    <div className="max-w-6xl mx-auto space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold text-foreground">Semantic Search Widget</h1>
+          <p className="text-muted-foreground mt-1">Configure {activeCompany.name}'s smart search bar and get the embed code.</p>
+        </div>
+        <div className="flex gap-3">
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="gap-2">
+                <Code className="w-4 h-4" /> Embed Search Bar
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Embed on your website</DialogTitle>
+                <DialogDescription>
+                  Copy and paste this code exactly where you want the Search Bar to appear in your e-commerce header or navigation.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="relative mt-4">
+                <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto font-mono text-muted-foreground">
+                  {embedCode}
+                </pre>
+                <Button 
+                  size="icon" 
+                  variant="secondary" 
+                  className="absolute top-2 right-2 h-8 w-8"
+                  onClick={() => copyToClipboard(embedCode)}
+                >
+                  {copied ? <Check className="h-4 w-4 text-green-500" /> : <Code className="h-4 w-4" />}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+
+          <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+            {isSaving ? <Spinner className="w-4 h-4" /> : <Save className="w-4 h-4" />}
+            Save Changes
+          </Button>
+        </div>
       </div>
 
-      {/* Search Bar Card */}
-      <Card className="border-border shadow-sm">
-        <CardContent className="pt-6">
-          <form onSubmit={handleSearch} className="flex gap-3">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
-              <Input
-                type="text"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Ej: 'A cheap laptop for gaming' or 'Red sports shoes'"
-                className="pl-10 h-12 text-md"
-              />
-            </div>
-            <Button type="submit" disabled={isSearching || !query.trim()} className="h-12 px-8">
-              {isSearching ? <Spinner className="w-5 h-5 mr-2" /> : "Test Search"}
-            </Button>
-          </form>
-          <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
-            <AlertCircle className="w-4 h-4" />
-            <span>This connects directly to the Vector Database (Pinecone/PGVector) mimicking what the AI sees before replying.</span>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Left Column: Settings Form */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Appearance & Brand</CardTitle>
+              <CardDescription>Match the search widget with your brand colors. This color is shared with your chatbot.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Color Picker */}
+              <div className="space-y-3">
+                <Label>Brand Accent Color</Label>
+                <div className="flex flex-wrap gap-3">
+                  {PRESET_COLORS.map((color) => (
+                    <button
+                      key={color.value}
+                      onClick={() => setConfig({...config, theme_color: color.value})}
+                      className={`w-8 h-8 rounded-full border-2 transition-transform ${config.theme_color === color.value ? 'scale-110 border-foreground shadow-md' : 'border-transparent hover:scale-105'}`}
+                      style={{ backgroundColor: color.value }}
+                      title={color.name}
+                    />
+                  ))}
+                  <div className="flex items-center gap-2 ml-4 border-l pl-4 border-muted">
+                    <Input 
+                      type="color" 
+                      value={config.theme_color}
+                      onChange={(e) => setConfig({...config, theme_color: e.target.value})}
+                      className="w-8 h-8 p-0 border-0 rounded-full overflow-hidden cursor-pointer"
+                    />
+                    <span className="text-xs text-muted-foreground font-mono uppercase">{config.theme_color}</span>
+                  </div>
+                </div>
+              </div>
 
-      {/* Results Section */}
-      {hasSearched && (
-        <div className="space-y-4">
-          <h3 className="text-lg font-medium flex items-center gap-2">
-            Top Results <Badge variant="secondary">{results.length}</Badge>
-          </h3>
+              <div className="p-4 bg-muted/50 rounded-lg border border-border mt-4">
+                <div className="flex items-start gap-3">
+                  <Sparkles className="w-5 h-5 text-amber-500 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="text-sm font-semibold">How it works</h4>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Unlike traditional keyword search, our Semantic Search understands context and synonyms. If a customer types "device for listening to music while running", it will show sports earphones even if those exact words aren't in the title.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column: Live Preview */}
+        <div className="flex flex-col items-center pt-8">
+          <div className="mb-4 text-sm font-medium text-muted-foreground uppercase tracking-widest">Live Preview</div>
           
-          {results.length === 0 && !isSearching ? (
-            <Card className="border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <Box className="h-12 w-12 text-muted-foreground mb-4 opacity-50" />
-                <h3 className="text-lg font-medium">No related products found</h3>
-                <p className="text-muted-foreground max-w-sm mt-1">
-                  Try a different query or ensure {activeCompany.name} has products synced with embeddings.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {results.map((product, index) => (
-                <Card key={`${product.variant_id}-${index}`} className="overflow-hidden hover:shadow-md transition-shadow">
-                  {/* Imagen del Producto (Si existe) */}
-                  <div className="w-full h-48 bg-muted/30 border-b border-border flex items-center justify-center overflow-hidden">
-                    {product.image_url ? (
-                      <img 
-                        src={product.image_url} 
-                        alt={product.name} 
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          // Fallback si la imagen de Odoo está rota
-                          (e.target as HTMLImageElement).style.display = 'none';
-                          (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
-                        }}
-                      />
-                    ) : (
-                      <div className="flex flex-col items-center text-muted-foreground opacity-50">
-                        <ImageIcon className="w-10 h-10 mb-2" />
-                        <span className="text-xs font-medium">No Image</span>
+          {/* Mock E-commerce Header */}
+          <div className="w-full max-w-[450px] bg-[var(--surface-container-lowest)] border border-[var(--outline-variant)] rounded-xl shadow-2xl relative flex flex-col overflow-visible">
+            
+            {/* Fake Website Navbar */}
+            <div className="h-16 bg-background border-b border-border flex items-center px-6 gap-6 rounded-t-xl z-20 relative">
+              <div className="font-bold text-xl tracking-tight">STORE</div>
+              
+              {/* THE SEARCH BAR PREVIEW */}
+              <div className="flex-1 relative">
+                <div 
+                  className={`flex items-center h-10 px-3 bg-muted/50 rounded-full border transition-all cursor-text ${isSearchFocused ? 'ring-2 ring-opacity-20 border-transparent' : 'border-border hover:border-muted-foreground/30'}`}
+                  style={{ 
+                    borderColor: isSearchFocused ? config.theme_color : undefined,
+                    boxShadow: isSearchFocused ? \`0 0 0 3px \${config.theme_color}20\` : undefined
+                  }}
+                  onClick={() => setIsSearchFocused(true)}
+                  onMouseLeave={() => setIsSearchFocused(false)}
+                >
+                  <Search className="w-4 h-4 text-muted-foreground mr-2" />
+                  <span className="text-sm text-foreground flex-1">red running shoes...</span>
+                  {isSearchFocused && <Spinner className="w-3 h-3 text-muted-foreground" />}
+                </div>
+
+                {/* THE DROPDOWN RESULTS PREVIEW */}
+                {isSearchFocused && (
+                  <div className="absolute top-[120%] left-0 w-[350px] bg-background border border-border rounded-xl shadow-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2">
+                    <div className="px-4 py-2 bg-muted/30 border-b border-border flex items-center gap-2">
+                      <Sparkles className="w-3.5 h-3.5" style={{ color: config.theme_color }} />
+                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Semantic Results</span>
+                    </div>
+                    
+                    <div className="p-2 space-y-1">
+                      {/* Fake Product 1 */}
+                      <div className="flex gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors group">
+                        <div className="w-12 h-12 bg-muted rounded-md flex items-center justify-center flex-shrink-0 border border-border">
+                          <ShoppingBag className="w-5 h-5 text-muted-foreground opacity-50" />
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                          <p className="text-sm font-medium truncate group-hover:text-foreground transition-colors" style={{ color: config.theme_color }}>
+                            Nike Air Zoom Pegasus 39
+                          </p>
+                          <p className="text-xs text-muted-foreground">$120.00</p>
+                        </div>
                       </div>
-                    )}
-                    {/* Fallback oculto por defecto */}
-                    <div className="hidden flex-col items-center text-muted-foreground opacity-50">
-                      <ImageIcon className="w-10 h-10 mb-2" />
-                      <span className="text-xs font-medium">Image Error</span>
+
+                      {/* Fake Product 2 */}
+                      <div className="flex gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors group">
+                        <div className="w-12 h-12 bg-muted rounded-md flex items-center justify-center flex-shrink-0 border border-border">
+                          <ShoppingBag className="w-5 h-5 text-muted-foreground opacity-50" />
+                        </div>
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                          <p className="text-sm font-medium truncate group-hover:text-foreground transition-colors" style={{ color: config.theme_color }}>
+                            Adidas Ultraboost 22 (Crimson)
+                          </p>
+                          <p className="text-xs text-muted-foreground">$190.00</p>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="p-3 border-t border-border bg-muted/10">
+                      <button className="w-full flex items-center justify-center gap-2 text-xs font-medium hover:underline transition-all" style={{ color: config.theme_color }}>
+                        View all 12 results <ArrowRight className="w-3 h-3" />
+                      </button>
                     </div>
                   </div>
-                  
-                  <CardContent className="p-4">
-                    <div className="space-y-3">
-                      <div>
-                        <h4 className="font-semibold text-sm line-clamp-2" title={product.name}>
-                          {product.name}
-                        </h4>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="outline" className="text-[10px] uppercase text-muted-foreground">
-                            {product.category || 'General'}
-                          </Badge>
-                          <span className="text-xs text-muted-foreground font-mono">
-                            {product.sku && `SKU: ${product.sku}`}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center justify-between pt-2 border-t border-border">
-                        <div className="flex items-center gap-1.5 text-green-600 font-semibold">
-                          <Tag className="w-4 h-4" />
-                          <span>${product.price.toFixed(2)}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 text-muted-foreground text-sm">
-                          <Package className="w-4 h-4" />
-                          <span>Stock: {product.stock}</span>
-                        </div>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                )}
+              </div>
             </div>
-          )}
+            
+            {/* Fake Website Body */}
+            <div className="h-64 p-6 opacity-30 pointer-events-none rounded-b-xl bg-background" onClick={() => setIsSearchFocused(false)}>
+              <div className="h-32 w-full bg-muted rounded-xl mb-4" />
+              <div className="grid grid-cols-3 gap-4">
+                <div className="h-24 bg-muted rounded-xl" />
+                <div className="h-24 bg-muted rounded-xl" />
+                <div className="h-24 bg-muted rounded-xl" />
+              </div>
+            </div>
+
+          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }
