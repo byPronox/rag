@@ -222,7 +222,7 @@ export default function SemanticSearchConfigPage() {
                   className={`flex items-center h-10 px-3 bg-muted/50 rounded-full border transition-all cursor-text ${isSearchFocused ? 'ring-2 ring-opacity-20 border-transparent' : 'border-border hover:border-muted-foreground/30'}`}
                   style={{ 
                     borderColor: isSearchFocused ? config.theme_color : undefined,
-                    boxShadow: isSearchFocused ? \`0 0 0 3px \${config.theme_color}20\` : undefined
+                    boxShadow: isSearchFocused ? `0 0 0 3px ${config.theme_color}20` : undefined
                   }}
                   onClick={() => setIsSearchFocused(true)}
                   onMouseLeave={() => setIsSearchFocused(false)}
