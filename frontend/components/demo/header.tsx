@@ -1,12 +1,17 @@
 "use client"
 
 import Link from "next/link"
-import { Store, User } from "lucide-react"
+import { Bell, BellOff, Store } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { useAuth } from "@/lib/auth-context"
 import { useCompany } from "@/lib/company-context"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { UserMenu } from "@/components/user-menu"
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 
 export function DemoHeader() {
   const { user } = useAuth()
@@ -63,19 +68,40 @@ export function DemoHeader() {
         )}
       </div>
       
-      {/* Right Section: User Menu / Login Avatar */}
+      {/* Right Section: Trailing Icons */}
       <div className="flex items-center gap-2 text-primary">
-        {user ? (
-          <UserMenu />
-        ) : (
-          <Link href="/login" className="hover:opacity-80 transition-opacity" title="Iniciar Sesión">
-            <Avatar className="h-8 w-8 border border-primary/20 transition-transform hover:scale-105">
-              <AvatarFallback className="bg-primary text-primary-foreground">
-                <User className="w-4 h-4" />
-              </AvatarFallback>
-            </Avatar>
-          </Link>
-        )}
+        {/* Notifications Dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="hover:text-primary/80 transition-colors duration-200 rounded-full hover:bg-[var(--surface-container)]"
+            >
+              <Bell className="w-5 h-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent 
+            align="end" 
+            className="w-72 p-4 bg-white border border-[var(--outline-variant)]/30 shadow-lg rounded-xl"
+          >
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-[var(--surface-container-low)] flex items-center justify-center mb-3">
+                <BellOff className="w-5 h-5 text-[var(--on-surface-variant)]" />
+              </div>
+              <p className="text-sm font-medium text-[var(--on-surface)]">
+                No notifications yet
+              </p>
+              <p className="text-xs text-[var(--on-surface-variant)] mt-1">
+                We'll notify you when something arrives
+              </p>
+            </div>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Componente Dinámico de Usuario */}
+        <UserMenu />
+        
       </div>
     </header>
   )
