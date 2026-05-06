@@ -4,10 +4,11 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { apiGet, apiPost, AUTH_ENDPOINTS } from "./api" // Ajusta la ruta si es necesario
 
 export interface User {
-  id: number
-  email: string
-  role: "admin" | "user"
-  is_active: boolean
+  id: number;
+  email: string;
+  role: string;
+  is_active: boolean;
+  api_key?: string;
 }
 
 interface AuthContextType {

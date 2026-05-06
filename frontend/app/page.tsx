@@ -12,7 +12,7 @@ import { ProductGrid } from "@/components/demo/product-grid"
 import { ChatWidget } from "@/components/demo/chat-widget"
 
 export default function DemoPage() {
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth()
+  const { isAuthenticated, isLoading: isAuthLoading, user } = useAuth()
   const { activeCompany } = useCompany()
 
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
@@ -43,10 +43,18 @@ export default function DemoPage() {
       return
     }
 
-    // Real Search Flow (Logged in & Company selected)
     try {
-      const apiKey = "your_master_api_key_here"; // Replace with real logic
-      const results = await testSemanticSearch(query, activeCompany.company_id, apiKey)
+      const userApiKey = (user as any)?.api_key;
+      
+      if (!userApiKey) {
+        console.error("[RAG Error] No API Key found for this user");
+        alert("Error de sesión: No se detectó tu API Key. Cierra sesión y vuelve a entrar.");
+        setSearchResults([]);
+        return;
+      }
+
+      // Pasamos la llave real al Microservicio 3
+      const results = await testSemanticSearch(query, activeCompany.company_id, userApiKey)
       setSearchResults(results)
     } catch (error) {
       console.error("[RAG Error] Search failed:", error)

@@ -1,10 +1,10 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { Bot, MessageSquare, Sparkles, Store, User, Send, X, Lock } from "lucide-react"
+import { Bot, MessageSquare, Sparkles, Store, User as UserIcon, Send, X, Lock } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useCompany } from "@/lib/company-context"
-import { getCompanyConfig, sendRagMessage } from "@/lib/api" // <-- Agregada la importación
+import { getCompanyConfig, sendRagMessage } from "@/lib/api"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -18,7 +18,8 @@ interface Message {
 }
 
 export function ChatWidget() {
-  const { isAuthenticated } = useAuth()
+  // AHORA EXTRAEMOS EL USUARIO COMPLETO (que contiene user.api_key gracias a tu endpoint /me)
+  const { isAuthenticated, user } = useAuth()
   const { activeCompany } = useCompany()
   
   const [isOpen, setIsOpen] = useState(false)
@@ -30,13 +31,11 @@ export function ChatWidget() {
   const [config, setConfig] = useState({
     color: "#8b5cf6",
     welcome: "Hello! How can I help you find the perfect product today?",
-    icon: "Bot",
-    apiKey: "your_master_api_key_here"
+    icon: "Bot"
   })
 
   const [sessionId] = useState(`web_demo_${Date.now()}`)
 
-  // Setup initial state based on authentication and active company
   useEffect(() => {
     if (isAuthenticated && activeCompany) {
       getCompanyConfig(activeCompany.company_id).then(data => {
@@ -51,7 +50,6 @@ export function ChatWidget() {
         }
       }).catch(console.error)
     } else {
-      // Unauthenticated Mode
       setMessages([{ 
         id: 'welcome', 
         text: "Hello! To access full AI chat features and search real catalogs, please contact us for access or log in to your account.", 
@@ -75,20 +73,34 @@ export function ChatWidget() {
     setMessages(prev => [...prev, { id: Date.now().toString(), text, isUser: true }])
     setIsTyping(true)
 
+    // VALIDACIÓN CRÍTICA: Aseguramos que tenemos la llave antes de llamar al Microservicio 3
+    // Como TypeScript a veces no detecta campos nuevos rápido, usamos un cast defensivo.
+    const userApiKey = (user as any)?.api_key;
+    
+    if (!userApiKey) {
+      setMessages(prev => [...prev, { 
+        id: Date.now().toString(), 
+        text: "Error: No se encontró la API Key en tu sesión. Por favor, cierra sesión y vuelve a entrar.", 
+        isUser: false 
+      }])
+      setIsTyping(false)
+      return;
+    }
+
     try {
-      // Delegamos la llamada a la capa de servicios/API
+      // Llamada real usando la llave del usuario actual (Admin o Tenant)
       const data = await sendRagMessage(
         { 
           message: text, 
           session_id: sessionId,
           company_id: activeCompany.company_id 
         },
-        config.apiKey
+        userApiKey // <--- LA MAGIA OCURRE AQUÍ
       )
       
       setMessages(prev => [...prev, { id: Date.now().toString(), text: data.reply || data.answer || "Sorry, error.", isUser: false }])
     } catch (e) {
-      setMessages(prev => [...prev, { id: Date.now().toString(), text: "Connection error.", isUser: false }])
+      setMessages(prev => [...prev, { id: Date.now().toString(), text: "Connection error with RAG server.", isUser: false }])
     } finally {
       setIsTyping(false)
     }
@@ -112,7 +124,7 @@ export function ChatWidget() {
             {messages.map(msg => (
               <div key={msg.id} className={`flex gap-3 ${msg.isUser ? 'flex-row-reverse' : ''}`}>
                 <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-white" style={{ backgroundColor: config.color }}>
-                  {msg.isUser ? <User className="w-4 h-4" /> : <SelectedIcon className="w-4 h-4" />}
+                  {msg.isUser ? <UserIcon className="w-4 h-4" /> : <SelectedIcon className="w-4 h-4" />}
                 </div>
                 <div className={`px-4 py-2 text-sm max-w-[75%] shadow-sm ${msg.isUser ? 'text-white rounded-2xl rounded-tr-sm' : 'bg-background border border-border text-foreground rounded-2xl rounded-tl-sm'}`} style={msg.isUser ? { backgroundColor: config.color } : {}}>
                   {msg.text}

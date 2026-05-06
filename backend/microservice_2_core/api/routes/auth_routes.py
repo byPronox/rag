@@ -34,8 +34,16 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), 
     }
 
 @router.get("/me", response_model=UserLoginResponse)
-def get_current_user_info(current_user: User = Depends(get_current_user)):
-    return current_user
+def get_current_user_info(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    config = db.query(UserConfig).filter(UserConfig.user_id == current_user.id).first()
+    
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "role": current_user.role,
+        "is_active": current_user.is_active,
+        "api_key": config.system_api_key if config else None
+    }
 
 @router.post("/logout")
 def logout(response: Response):

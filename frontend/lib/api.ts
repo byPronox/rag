@@ -312,13 +312,15 @@ export interface SearchResult {
 }
 
 export async function testSemanticSearch(query: string, companyId: string, apiKey: string): Promise<SearchResult[]> {
-  const url = `${RAG_ENDPOINTS.search}`; // Asegúrate de tener RAG_ENDPOINTS importado/definido
+  const url = `${RAG_ENDPOINTS.search}`;
   
+  if (!apiKey) throw new Error("API Key faltante en la búsqueda");
+
   const response = await fetch(url, {
     method: "POST",
     headers: { 
       "Content-Type": "application/json",
-      "x-api-key": apiKey 
+      "x-api-key": apiKey
     },
     body: JSON.stringify({ query: query, company_id: companyId }),
   });
