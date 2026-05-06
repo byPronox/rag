@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database.connection import get_db
 from models.schema import User, UserConfig
@@ -8,7 +8,16 @@ from api.deps import get_current_user
 
 router = APIRouter()
 
-@router.post("/generate", response_model=ApiKeyResponse, summary="Generar API Key para Odoo/Worker")
+@router.get("/", response_model=ApiKeyResponse, summary="Obtener API Key actual")
+def get_current_api_key(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    config = db.query(UserConfig).filter(UserConfig.user_id == current_user.id).first()
+    
+    if not config or not config.system_api_key:
+        raise HTTPException(status_code=404, detail="API Key no encontrada para este usuario.")
+        
+    return {"message": "API Key recuperada con éxito", "api_key": config.system_api_key}
+
+@router.post("/generate", response_model=ApiKeyResponse, summary="Generar nueva API Key para Odoo/Worker")
 def create_new_api_key(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     config = db.query(UserConfig).filter(UserConfig.user_id == current_user.id).first()
     

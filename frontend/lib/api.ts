@@ -331,8 +331,8 @@ export async function testSemanticSearch(query: string, companyId: string, apiKe
   return data.results;
 }
 
-export async function getUserApiKey(): Promise<{ system_api_key: string }> {
-  return apiGet<{ system_api_key: string }>(`${USER_ENDPOINTS.config}/../api-key-endpoint`); 
+export async function getUserApiKey(): Promise<{ message: string, api_key: string }> {
+  return apiGet<{ message: string, api_key: string }>(`${CORE_API_URL}/api/v1/api-keys/`); 
 }
 
 // ==========================================
