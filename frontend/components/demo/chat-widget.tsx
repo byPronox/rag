@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { Bot, MessageSquare, Sparkles, Store, User, Send, X, Lock } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useCompany } from "@/lib/company-context"
-import { getCompanyConfig } from "@/lib/api"
+import { getCompanyConfig, sendRagMessage } from "@/lib/api" // <-- Agregada la importación
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
@@ -76,19 +76,16 @@ export function ChatWidget() {
     setIsTyping(true)
 
     try {
-      const res = await fetch(`${process.env.NEXT_PUBLIC_RAG_API_URL}/api/v1/chat/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': config.apiKey
-        },
-        body: JSON.stringify({ 
+      // Delegamos la llamada a la capa de servicios/API
+      const data = await sendRagMessage(
+        { 
           message: text, 
           session_id: sessionId,
           company_id: activeCompany.company_id 
-        })
-      })
-      const data = await res.json()
+        },
+        config.apiKey
+      )
+      
       setMessages(prev => [...prev, { id: Date.now().toString(), text: data.reply || data.answer || "Sorry, error.", isUser: false }])
     } catch (e) {
       setMessages(prev => [...prev, { id: Date.now().toString(), text: "Connection error.", isUser: false }])
@@ -136,7 +133,6 @@ export function ChatWidget() {
           </div>
 
           <div className="p-3 border-t border-border bg-background">
-            {/* Conditional Input Rendering based on Authentication */}
             {isAuthenticated ? (
               <div className="flex gap-2">
                 <Input 

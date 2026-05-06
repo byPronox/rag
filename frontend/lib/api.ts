@@ -298,7 +298,7 @@ export async function getSearchHistory(): Promise<SearchQuery[]> {
 }
 
 // ==========================================
-// RAG SEMANTIC SEARCH
+// RAG SEMANTIC SEARCH widget
 // ==========================================
 
 export interface SearchResult {
@@ -333,4 +333,37 @@ export async function testSemanticSearch(query: string, companyId: string, apiKe
 
 export async function getUserApiKey(): Promise<{ system_api_key: string }> {
   return apiGet<{ system_api_key: string }>(`${USER_ENDPOINTS.config}/../api-key-endpoint`); 
+}
+
+// ==========================================
+// RAG CHAT web demo
+// ==========================================
+
+export interface ChatMessagePayload {
+  message: string;
+  session_id: string;
+  company_id: string;
+}
+
+export interface RagChatResponse {
+  reply?: string;
+  answer?: string;
+}
+
+export async function sendRagMessage(payload: ChatMessagePayload, apiKey: string): Promise<RagChatResponse> {
+  // Usamos tu RAG_ENDPOINTS.chat centralizado
+  const response = await fetch(RAG_ENDPOINTS.chat, {
+    method: "POST",
+    headers: { 
+      "Content-Type": "application/json",
+      "x-api-key": apiKey 
+    },
+    body: JSON.stringify(payload),
+  });
+
+  if (!response.ok) {
+    throw new Error("Error en la comunicación con el modelo RAG");
+  }
+  
+  return response.json();
 }
