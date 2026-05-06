@@ -11,6 +11,7 @@ class UserLoginResponse(BaseModel):
     email: str
     role: str
     is_active: bool
+    api_key: str | None = None
 
 class Token(BaseModel):
     access_token: str
