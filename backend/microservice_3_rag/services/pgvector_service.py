@@ -2,9 +2,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 
 def search_similar_products(db: Session, user_id: int, query_vector: list, company_id: str, limit: int = 5):
-    # Añadimos image_128_url a la consulta SQL
     sql = text("""
-        SELECT variant_id, sku, display_name, price_included, stock, category, image_128_url 
+        SELECT variant_id, sku, display_name, price_included, stock, category, image_512_url 
         FROM product_embeddings 
         WHERE user_id = :user_id AND company_id = :company_id
         ORDER BY embedding <=> CAST(:vector AS vector) 
@@ -27,6 +26,6 @@ def search_similar_products(db: Session, user_id: int, query_vector: list, compa
             "price": float(row[3]) if row[3] else 0.0, 
             "stock": float(row[4]) if row[4] else 0, 
             "category": row[5],
-            "image_url": row[6] # <- NUEVO: Extraemos la imagen
+            "image_url": row[6]
         })
     return products

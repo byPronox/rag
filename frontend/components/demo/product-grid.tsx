@@ -50,22 +50,31 @@ const demoProducts: Product[] = [
   }
 ]
 
+// Reemplaza tu antigua función SkeletonCard con esta versión Premium
 function SkeletonCard({ isFeatured }: { isFeatured?: boolean }) {
   return (
-    <Card className="overflow-hidden h-full flex flex-col border-[var(--outline-variant)]">
-      <div className={`${isFeatured ? 'h-64' : 'h-48'} w-full bg-muted/50 animate-pulse relative`}>
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-[shimmer_1.5s_infinite]" />
+    <Card className="overflow-hidden h-full flex flex-col border-border/40 bg-background shadow-sm">
+      <div className={`${isFeatured ? 'h-64 md:h-72' : 'h-48'} w-full relative overflow-hidden bg-muted/20`}>
+        <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/30 to-transparent" />
       </div>
-      <CardContent className="p-5 flex flex-col flex-1 gap-3">
-        <div className="h-5 w-3/4 bg-muted/50 animate-pulse rounded" />
-        <div className="h-4 w-1/2 bg-muted/50 animate-pulse rounded mb-2" />
-        <div className="flex gap-2">
-          <div className="h-4 w-16 bg-muted/50 animate-pulse rounded" />
-          <div className="h-4 w-20 bg-muted/50 animate-pulse rounded" />
+      
+      <CardContent className="p-5 flex flex-col flex-1 gap-4">
+        <div className="space-y-3">
+          <div className="h-5 w-3/4 bg-muted/30 rounded-md overflow-hidden relative">
+            <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+          </div>
+          <div className="h-4 w-1/2 bg-muted/30 rounded-md overflow-hidden relative">
+            <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+          </div>
         </div>
-        <div className="mt-auto pt-4 border-t border-border flex justify-between items-center">
-          <div className="h-6 w-16 bg-muted/50 animate-pulse rounded" />
-          <div className="h-4 w-20 bg-muted/50 animate-pulse rounded" />
+        
+        <div className="mt-auto pt-4 border-t border-border/30 flex justify-between items-center">
+          <div className="h-6 w-20 bg-muted/30 rounded-md overflow-hidden relative">
+            <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+          </div>
+          <div className="h-8 w-24 bg-muted/30 rounded-md overflow-hidden relative">
+            <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/30 to-transparent" />
+          </div>
         </div>
       </CardContent>
     </Card>
