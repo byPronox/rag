@@ -4,8 +4,6 @@ import { useState, useEffect, useRef } from "react"
 import { Bot, MessageSquare, Sparkles, Store, User, Send, X } from "lucide-react"
 import { useCompany } from "@/lib/company-context"
 import { getCompanyConfig } from "@/lib/api"
-
-// AQUÍ FALTABAN ESTAS DOS IMPORTACIONES:
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 
@@ -25,7 +23,6 @@ export function ChatWidget() {
   const [isTyping, setIsTyping] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Configuración dinámica
   const [config, setConfig] = useState({
     color: "#8b5cf6",
     welcome: "Hello! How can I help you find the perfect product today?",
@@ -33,10 +30,8 @@ export function ChatWidget() {
     apiKey: "your_master_api_key_here"
   })
 
-  // Generar ID de sesión al cargar
   const [sessionId] = useState(`web_demo_${Date.now()}`)
 
-  // Cargar configuración de la compañía activa
   useEffect(() => {
     if (activeCompany) {
       getCompanyConfig(activeCompany.company_id).then(data => {
@@ -51,7 +46,10 @@ export function ChatWidget() {
         }
       }).catch(console.error)
     } else {
-      setMessages([{ id: 'welcome', text: config.welcome, isUser: false }])
+      // Modo Demo
+      setMessages([{ id: 'welcome', text: "Hello! I'm the Demo AI. Try asking me for 'a minimalist desk'.", isUser: false }])
+      // Reset color to default if logged out
+      setConfig(prev => ({ ...prev, color: "#8b5cf6", icon: "Bot" }))
     }
   }, [activeCompany])
 
@@ -62,13 +60,27 @@ export function ChatWidget() {
   const SelectedIcon = ICONS[config.icon as keyof typeof ICONS] || Bot
 
   const handleSend = async () => {
-    if (!input.trim() || !activeCompany) return
+    if (!input.trim()) return
     const text = input.trim()
     setInput("")
     
     setMessages(prev => [...prev, { id: Date.now().toString(), text, isUser: true }])
     setIsTyping(true)
 
+    // Lógica para Modo Demo (Usuario sin loguear o sin compañía)
+    if (!activeCompany) {
+      setTimeout(() => {
+        setMessages(prev => [...prev, { 
+          id: Date.now().toString(), 
+          text: "I'm currently in demo mode! Please log in and select your company to connect me to your real product catalog.", 
+          isUser: false 
+        }])
+        setIsTyping(false)
+      }, 1000)
+      return
+    }
+
+    // Búsqueda Real
     try {
       const res = await fetch(`${process.env.NEXT_PUBLIC_RAG_API_URL}/api/v1/chat/`, {
         method: 'POST',
@@ -91,7 +103,7 @@ export function ChatWidget() {
     }
   }
 
-  if (!activeCompany) return null; // No mostrar chatbot si no hay compañía
+  // ELIMINADA LA RESTRICCIÓN: if (!activeCompany) return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
@@ -100,7 +112,7 @@ export function ChatWidget() {
           <div className="p-4 flex justify-between items-center text-white shadow-sm" style={{ backgroundColor: config.color }}>
             <div className="flex items-center gap-2">
               <SelectedIcon className="w-5 h-5" />
-              <span className="font-semibold text-sm">AI Assistant Preview</span>
+              <span className="font-semibold text-sm">{activeCompany ? `${activeCompany.name} AI` : "Demo Assistant"}</span>
             </div>
             <button onClick={() => setIsOpen(false)} className="hover:bg-white/20 p-1 rounded-md transition-colors"><X className="w-5 h-5" /></button>
           </div>
