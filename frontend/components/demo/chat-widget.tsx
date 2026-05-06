@@ -5,6 +5,10 @@ import { Bot, MessageSquare, Sparkles, Store, User, Send, X } from "lucide-react
 import { useCompany } from "@/lib/company-context"
 import { getCompanyConfig } from "@/lib/api"
 
+// AQUÍ FALTABAN ESTAS DOS IMPORTACIONES:
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
+
 const ICONS = { Bot, MessageSquare, Sparkles, Store }
 
 interface Message {
