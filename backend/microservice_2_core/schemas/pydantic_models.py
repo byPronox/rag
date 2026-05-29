@@ -22,6 +22,10 @@ class ApiKeyResponse(BaseModel):
     message: str
     api_key: str
 
+class PasswordUpdate(BaseModel):
+    current_password: str
+    new_password: str
+
 class GlobalSettingsUpdate(BaseModel):
     default_llm_model: str
     default_embedding_model: str

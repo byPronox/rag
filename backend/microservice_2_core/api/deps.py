@@ -34,6 +34,7 @@ def get_current_user(token: str = Depends(get_token_from_request), db: Session =
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         email: str = payload.get("sub")
+        token_version: int = payload.get("tv")
         if email is None:
             raise credentials_exception
     except JWTError:
@@ -42,6 +43,14 @@ def get_current_user(token: str = Depends(get_token_from_request), db: Session =
     user = db.query(User).filter(User.email == email).first()
     if user is None:
         raise credentials_exception
+        
+    if token_version is not None and user.token_version != token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+        
     return user
 
 def get_current_admin(current_user: User = Depends(get_current_user)) -> User:

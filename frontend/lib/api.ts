@@ -32,6 +32,11 @@ export const USER_ENDPOINTS = {
   metrics: `${CORE_API_URL}/api/v1/user/metrics`,
   chatHistory: `${CORE_API_URL}/api/v1/user/history/chat`,
   searchHistory: `${CORE_API_URL}/api/v1/user/history/search`,
+  settings: {
+    password: `${CORE_API_URL}/api/v1/user/settings/password`,
+    logoutAll: `${CORE_API_URL}/api/v1/user/settings/logout-all`,
+    regenerateApiKey: `${CORE_API_URL}/api/v1/user/settings/api-key/regenerate`
+  }
 }
 
 // RAG endpoints -> Usan el RAG API (Microservicio 3)
@@ -339,6 +344,26 @@ export interface SearchQuery {
 
 export async function getSearchHistory(companyId: string): Promise<SearchQuery[]> {
   return apiGet<SearchQuery[]>(`${USER_ENDPOINTS.searchHistory}/${companyId}`)
+}
+
+// User Settings
+export async function updateUserPassword(data: any): Promise<{message: string}> {
+  return apiRequest<{message: string}>(USER_ENDPOINTS.settings.password, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  })
+}
+
+export async function logoutAllDevices(): Promise<{message: string}> {
+  return apiRequest<{message: string}>(USER_ENDPOINTS.settings.logoutAll, {
+    method: "POST",
+  })
+}
+
+export async function regenerateUserApiKey(): Promise<{message: string, api_key: string}> {
+  return apiRequest<{message: string, api_key: string}>(USER_ENDPOINTS.settings.regenerateApiKey, {
+    method: "POST",
+  })
 }
 
 // ==========================================

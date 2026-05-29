@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime
+import secrets
 from database.connection import get_db
-from models.schema import User, UserCompany, AIModel, ProductEmbedding, ChatHistory, SearchHistory
+from models.schema import User, UserCompany, AIModel, ProductEmbedding, ChatHistory, SearchHistory, UserConfig
 from api.deps import get_current_user
-from schemas.pydantic_models import CompanyConfigUpdate
+from schemas.pydantic_models import CompanyConfigUpdate, PasswordUpdate
+from security.jwt_handler import verify_password, get_password_hash
+
 router = APIRouter()
 
 @router.get("/companies")
@@ -186,4 +189,39 @@ def get_search_history(company_id: str, current_user: User = Depends(get_current
         }
         for s in searches
     ]
+
+# =========================================================
+# SETTINGS
+# =========================================================
+
+@router.put("/settings/password")
+def update_user_password(data: PasswordUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    if not verify_password(data.current_password, current_user.hashed_password):
+        raise HTTPException(status_code=400, detail="Contraseña actual incorrecta")
+        
+    current_user.hashed_password = get_password_hash(data.new_password)
+    db.commit()
+    return {"message": "Contraseña actualizada exitosamente"}
+
+@router.post("/settings/logout-all")
+def logout_all_devices(response: Response, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Increment token_version to invalidate all existing tokens
+    current_user.token_version += 1
+    db.commit()
+    
+    # Clear local cookie just in case
+    response.delete_cookie(key="rag_token", httponly=True, samesite="none", path="/", secure=True)
+    return {"message": "Se cerró sesión en todos los dispositivos"}
+
+@router.post("/settings/api-key/regenerate")
+def regenerate_user_api_key(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    config = db.query(UserConfig).filter(UserConfig.user_id == current_user.id).first()
+    if not config:
+        raise HTTPException(status_code=404, detail="Configuración de usuario no encontrada")
+        
+    new_api_key = f"rag_{secrets.token_urlsafe(32)}"
+    config.system_api_key = new_api_key
+    db.commit()
+    
+    return {"message": "API Key regenerada exitosamente", "api_key": new_api_key}
 

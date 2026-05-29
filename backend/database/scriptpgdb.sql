@@ -67,7 +67,8 @@ CREATE TABLE users (
     email VARCHAR(100) UNIQUE NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
     role VARCHAR(20) DEFAULT 'user',
-    is_active BOOLEAN DEFAULT TRUE
+    is_active BOOLEAN DEFAULT TRUE,
+    token_version INTEGER DEFAULT 1
 );
 
 -- ==========================================

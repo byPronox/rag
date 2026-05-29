@@ -13,6 +13,7 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(20), default="user") 
     is_active = Column(Boolean, default=True)
+    token_version = Column(Integer, default=1)
     config = relationship("UserConfig", back_populates="user", uselist=False)
     companies = relationship("UserCompany", back_populates="user")
 

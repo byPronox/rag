@@ -20,7 +20,7 @@ def login(response: Response, form_data: OAuth2PasswordRequestForm = Depends(), 
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Esta cuenta ha sido desactivada. Por favor contacte al administrador.")
     
-    access_token = create_access_token(data={"sub": user.email})
+    access_token = create_access_token(data={"sub": user.email, "tv": user.token_version})
     
     response.set_cookie(
         key="rag_token", value=f"Bearer {access_token}", httponly=True, samesite="none", secure=True, path="/", max_age=86400 * 7
