@@ -30,8 +30,8 @@ export const USER_ENDPOINTS = {
   products: `${CORE_API_URL}/api/v1/user/products`,
   dashboardMetrics: `${CORE_API_URL}/api/v1/user/dashboard-metrics`,
   metrics: `${CORE_API_URL}/api/v1/user/metrics`,
-  chatHistory: `${CORE_API_URL}/api/v1/user/chat-history`,
-  searchHistory: `${CORE_API_URL}/api/v1/user/search-history`,
+  chatHistory: `${CORE_API_URL}/api/v1/history/chat`,
+  searchHistory: `${CORE_API_URL}/api/v1/history/search`,
 }
 
 // RAG endpoints -> Usan el RAG API (Microservicio 3)
@@ -321,21 +321,24 @@ export interface ChatMessage {
   session_id: string
   role: string
   message: string
+  tokens_used?: number
+  latency_ms?: number
   created_at: string
 }
 
-export async function getChatHistory(): Promise<ChatMessage[]> {
-  return apiGet<ChatMessage[]>(USER_ENDPOINTS.chatHistory)
+export async function getChatHistory(companyId: string): Promise<ChatMessage[]> {
+  return apiGet<ChatMessage[]>(`${USER_ENDPOINTS.chatHistory}/${companyId}`)
 }
 
 export interface SearchQuery {
   id: number
+  session_id?: string
   query_text: string
   created_at: string
 }
 
-export async function getSearchHistory(): Promise<SearchQuery[]> {
-  return apiGet<SearchQuery[]>(USER_ENDPOINTS.searchHistory)
+export async function getSearchHistory(companyId: string): Promise<SearchQuery[]> {
+  return apiGet<SearchQuery[]>(`${USER_ENDPOINTS.searchHistory}/${companyId}`)
 }
 
 // ==========================================

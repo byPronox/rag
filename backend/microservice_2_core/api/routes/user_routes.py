@@ -149,4 +149,41 @@ def get_dashboard_metrics(company_id: str, current_user: User = Depends(get_curr
         "tokens_used": tokens_used,
         "recent_activity": recent_activity
     }
+
+@router.get("/history/chat/{company_id}")
+def get_chat_history(company_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    chats = db.query(ChatHistory).filter(
+        ChatHistory.user_id == current_user.id,
+        ChatHistory.company_id == company_id
+    ).order_by(ChatHistory.created_at.asc()).all()
+    
+    return [
+        {
+            "id": c.id,
+            "session_id": c.session_id,
+            "role": c.role,
+            "message": c.message,
+            "tokens_used": c.tokens_used,
+            "latency_ms": c.latency_ms,
+            "created_at": c.created_at
+        }
+        for c in chats
+    ]
+
+@router.get("/history/search/{company_id}")
+def get_search_history(company_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    searches = db.query(SearchHistory).filter(
+        SearchHistory.user_id == current_user.id,
+        SearchHistory.company_id == company_id
+    ).order_by(SearchHistory.created_at.desc()).all()
+    
+    return [
+        {
+            "id": s.id,
+            "session_id": s.session_id,
+            "query_text": s.query_text,
+            "created_at": s.created_at
+        }
+        for s in searches
+    ]
 

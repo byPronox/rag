@@ -73,6 +73,7 @@ class SearchHistory(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
     company_id = Column(String(100))
+    session_id = Column(String(100))
     query_text = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
