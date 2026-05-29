@@ -286,6 +286,7 @@ export interface ProductItem {
   category: string;
   website_url?: string;
   image_128_url?: string;
+  image_512_url?: string;
   company_id: string;
 }
 

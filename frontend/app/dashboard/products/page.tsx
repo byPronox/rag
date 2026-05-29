@@ -132,9 +132,9 @@ export default function ProductsPage() {
             <Card key={product.variant_id} className="group overflow-hidden flex flex-col transition-all hover:shadow-md hover:border-primary/30 bg-card">
               {/* Product Image Area */}
               <div className="aspect-square bg-muted/30 relative flex items-center justify-center border-b border-border overflow-hidden">
-                {product.image_128_url ? (
+                {product.image_512_url || product.image_128_url ? (
                   <img 
-                    src={product.image_128_url.startsWith('http') ? product.image_128_url : `data:image/jpeg;base64,${product.image_128_url}`} 
+                    src={(product.image_512_url || product.image_128_url)!.startsWith('http') ? (product.image_512_url || product.image_128_url) : `data:image/jpeg;base64,${product.image_512_url || product.image_128_url}`} 
                     alt={product.name} 
                     className="object-contain w-full h-full p-4 group-hover:scale-105 transition-transform duration-500"
                     onError={(e) => {
@@ -152,7 +152,7 @@ export default function ProductsPage() {
                 </div>
                 
                 <div className="absolute top-3 right-3 flex flex-col gap-2">
-                  <Badge variant="secondary" className="bg-background/80 backdrop-blur-md border-border shadow-sm font-mono text-xs">
+                  <Badge className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm font-mono text-xs">
                     {product.sku}
                   </Badge>
                 </div>

@@ -68,6 +68,7 @@ def get_user_products(company_id: str, current_user: User = Depends(get_current_
             "category": p.category,
             "website_url": p.website_url,
             "image_128_url": p.image_128_url,
+            "image_512_url": p.image_512_url,
             "company_id": p.company_id
         }
         for p in products
