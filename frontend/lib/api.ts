@@ -28,6 +28,7 @@ export const USER_ENDPOINTS = {
   config: `${CORE_API_URL}/api/v1/user/config`,
   models: `${CORE_API_URL}/api/v1/user/models`,
   products: `${CORE_API_URL}/api/v1/user/products`,
+  dashboardMetrics: `${CORE_API_URL}/api/v1/user/dashboard-metrics`,
   metrics: `${CORE_API_URL}/api/v1/user/metrics`,
   chatHistory: `${CORE_API_URL}/api/v1/user/chat-history`,
   searchHistory: `${CORE_API_URL}/api/v1/user/search-history`,
@@ -292,6 +293,25 @@ export interface ProductItem {
 
 export async function getCompanyProducts(companyId: string): Promise<ProductItem[]> {
   return apiGet<ProductItem[]>(`${USER_ENDPOINTS.products}/${companyId}`)
+}
+
+export interface ActivityItem {
+  type: string;
+  detail: string;
+  time: string;
+  status: string;
+}
+
+export interface DashboardMetrics {
+  total_products: number;
+  total_chats: number;
+  total_searches: number;
+  tokens_used: number;
+  recent_activity: ActivityItem[];
+}
+
+export async function getDashboardMetrics(companyId: string): Promise<DashboardMetrics> {
+  return apiGet<DashboardMetrics>(`${USER_ENDPOINTS.dashboardMetrics}/${companyId}`)
 }
 
 // Historiales (Estos también requerirán filtrar por company_id en el backend más adelante, 

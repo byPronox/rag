@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+from datetime import datetime
 from database.connection import get_db
-from models.schema import User, UserCompany, AIModel, ProductEmbedding
+from models.schema import User, UserCompany, AIModel, ProductEmbedding, ChatHistory, SearchHistory
 from api.deps import get_current_user
 from schemas.pydantic_models import CompanyConfigUpdate
 router = APIRouter()
@@ -72,4 +74,79 @@ def get_user_products(company_id: str, current_user: User = Depends(get_current_
             "company_id": p.company_id
         }
         for p in products
-    ]
+    ]
+
+@router.get("/dashboard-metrics/{company_id}")
+def get_dashboard_metrics(company_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Total Products
+    total_products = db.query(func.count(ProductEmbedding.variant_id)).filter(
+        ProductEmbedding.user_id == current_user.id,
+        ProductEmbedding.company_id == company_id
+    ).scalar() or 0
+
+    # Total Chat Interactions
+    total_chats = db.query(func.count(ChatHistory.id)).filter(
+        ChatHistory.user_id == current_user.id,
+        ChatHistory.company_id == company_id,
+        ChatHistory.role == 'user'
+    ).scalar() or 0
+
+    # Total Searches
+    total_searches = db.query(func.count(SearchHistory.id)).filter(
+        SearchHistory.user_id == current_user.id,
+        SearchHistory.company_id == company_id
+    ).scalar() or 0
+
+    # Tokens Used
+    tokens_used = db.query(func.sum(ChatHistory.tokens_used)).filter(
+        ChatHistory.user_id == current_user.id,
+        ChatHistory.company_id == company_id
+    ).scalar() or 0
+
+    # Recent Activity (Merge recent chats and searches)
+    recent_chats = db.query(ChatHistory).filter(
+        ChatHistory.user_id == current_user.id,
+        ChatHistory.company_id == company_id,
+        ChatHistory.role == 'user'
+    ).order_by(ChatHistory.created_at.desc()).limit(5).all()
+
+    recent_searches = db.query(SearchHistory).filter(
+        SearchHistory.user_id == current_user.id,
+        SearchHistory.company_id == company_id
+    ).order_by(SearchHistory.created_at.desc()).limit(5).all()
+
+    # Format activities
+    activities = []
+    for c in recent_chats:
+        activities.append({
+            "type": "Chat",
+            "detail": f"User asked: '{c.message[:40]}{'...' if len(c.message) > 40 else ''}'",
+            "time": c.created_at.isoformat() if c.created_at else None,
+            "status": "Resolved",
+            "created_at": c.created_at
+        })
+    for s in recent_searches:
+        activities.append({
+            "type": "Search",
+            "detail": f"Term: '{s.query_text[:40]}{'...' if len(s.query_text) > 40 else ''}'",
+            "time": s.created_at.isoformat() if s.created_at else None,
+            "status": "Completed",
+            "created_at": s.created_at
+        })
+
+    # Sort combined activities by created_at desc and take top 5
+    activities.sort(key=lambda x: x["created_at"] or datetime.min, reverse=True)
+    recent_activity = activities[:5]
+
+    # Clean up the datetime object before returning
+    for a in recent_activity:
+        del a["created_at"]
+
+    return {
+        "total_products": total_products,
+        "total_chats": total_chats,
+        "total_searches": total_searches,
+        "tokens_used": tokens_used,
+        "recent_activity": recent_activity
+    }
+
