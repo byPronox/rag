@@ -30,8 +30,8 @@ export const USER_ENDPOINTS = {
   products: `${CORE_API_URL}/api/v1/user/products`,
   dashboardMetrics: `${CORE_API_URL}/api/v1/user/dashboard-metrics`,
   metrics: `${CORE_API_URL}/api/v1/user/metrics`,
-  chatHistory: `${CORE_API_URL}/api/v1/history/chat`,
-  searchHistory: `${CORE_API_URL}/api/v1/history/search`,
+  chatHistory: `${CORE_API_URL}/api/v1/user/history/chat`,
+  searchHistory: `${CORE_API_URL}/api/v1/user/history/search`,
 }
 
 // RAG endpoints -> Usan el RAG API (Microservicio 3)
