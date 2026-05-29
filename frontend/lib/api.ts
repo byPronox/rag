@@ -27,6 +27,7 @@ export const USER_ENDPOINTS = {
   companies: `${CORE_API_URL}/api/v1/user/companies`,
   config: `${CORE_API_URL}/api/v1/user/config`,
   models: `${CORE_API_URL}/api/v1/user/models`,
+  products: `${CORE_API_URL}/api/v1/user/products`,
   metrics: `${CORE_API_URL}/api/v1/user/metrics`,
   chatHistory: `${CORE_API_URL}/api/v1/user/chat-history`,
   searchHistory: `${CORE_API_URL}/api/v1/user/search-history`,
@@ -271,6 +272,25 @@ export async function getCompanyConfig(companyId: string): Promise<CompanyConfig
 // ACTUALIZADO: Actualiza la configuración de una compañía específica
 export async function updateCompanyConfig(companyId: string, config: Partial<CompanyConfig>): Promise<{message: string}> {
   return apiPut<{message: string}>(`${USER_ENDPOINTS.config}/${companyId}`, config as Record<string, unknown>)
+}
+
+// NUEVO: Obtener los productos exportados para una compañía
+export interface ProductItem {
+  variant_id: number;
+  sku: string;
+  name: string;
+  description?: string;
+  price_excluded: number;
+  price_included: number;
+  stock: number;
+  category: string;
+  website_url?: string;
+  image_128_url?: string;
+  company_id: string;
+}
+
+export async function getCompanyProducts(companyId: string): Promise<ProductItem[]> {
+  return apiGet<ProductItem[]>(`${USER_ENDPOINTS.products}/${companyId}`)
 }
 
 // Historiales (Estos también requerirán filtrar por company_id en el backend más adelante, 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database.connection import get_db
-from models.schema import User, UserCompany, AIModel
+from models.schema import User, UserCompany, AIModel, ProductEmbedding
 from api.deps import get_current_user
 from schemas.pydantic_models import CompanyConfigUpdate
 router = APIRouter()
@@ -48,3 +48,27 @@ def update_user_config(company_id: str, data: CompanyConfigUpdate, current_user:
 def get_user_active_models(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     models = db.query(AIModel).filter(AIModel.is_active == True).all()
     return models
+
+@router.get("/products/{company_id}")
+def get_user_products(company_id: str, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    products = db.query(ProductEmbedding).filter(
+        ProductEmbedding.user_id == current_user.id,
+        ProductEmbedding.company_id == company_id
+    ).all()
+    
+    return [
+        {
+            "variant_id": p.variant_id,
+            "sku": p.sku,
+            "name": p.display_name,
+            "description": p.description,
+            "price_excluded": p.price_excluded,
+            "price_included": p.price_included,
+            "stock": p.stock,
+            "category": p.category,
+            "website_url": p.website_url,
+            "image_128_url": p.image_128_url,
+            "company_id": p.company_id
+        }
+        for p in products
+    ]
