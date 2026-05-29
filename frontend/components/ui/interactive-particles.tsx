@@ -17,7 +17,7 @@ export function InteractiveParticles() {
   const containerRef = useRef<HTMLDivElement>(null)
   const [particles, setParticles] = useState<Particle[]>([])
   const [mousePos, setMousePos] = useState({ x: -1000, y: -1000 })
-  const animationRef = useRef<number>()
+  const animationRef = useRef<number | null>(null)
 
   useEffect(() => {
     // Generate random particles
