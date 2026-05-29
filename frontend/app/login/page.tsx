@@ -43,7 +43,7 @@ export default function LoginPage() {
         router.push("/dashboard")
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error al iniciar sesion")
+      setError(err instanceof Error ? err.message : "Failed to sign in")
     } finally {
       setIsLoading(false)
     }
@@ -91,29 +91,14 @@ export default function LoginPage() {
         {/* Content */}
         <div className="relative z-10 flex flex-col justify-between w-full p-12">
           {/* Logo */}
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/10">
-              <svg
-                className="w-6 h-6 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              </svg>
-            </div>
+          <div className="flex items-center">
             <span className="text-white font-semibold text-xl tracking-tight">RAG Intelligence</span>
           </div>
 
           {/* Center Content */}
           <div className="flex-1 flex flex-col items-center justify-center">
             {/* Illustration Container */}
-            <div className="w-full max-w-lg mb-10 p-6">
+            <div className="w-full max-w-lg p-6">
               <Image
                 src="/images/login-illustration.svg"
                 alt="Focused Developer Illustration"
@@ -123,22 +108,10 @@ export default function LoginPage() {
                 priority
               />
             </div>
-
-            {/* Welcome Text */}
-            <div className="text-center max-w-md">
-              <h2 className="text-4xl font-bold text-white mb-4 leading-tight">
-                Analyze Documents
-                <br />
-                <span className="text-indigo-200">with AI Power</span>
-              </h2>
-              <p className="text-indigo-100/80 text-lg leading-relaxed">
-                Transform your documents into actionable insights. Ask questions, get instant answers.
-              </p>
-            </div>
           </div>
 
           {/* Footer */}
-          <div className="text-indigo-200/50 text-sm">
+          <div className="absolute bottom-6 left-6 text-indigo-200/50 text-sm">
             &copy; {new Date().getFullYear()} RAG Intelligence. All rights reserved.
           </div>
         </div>
@@ -170,7 +143,7 @@ export default function LoginPage() {
           {/* Header */}
           <div className="mb-10">
             <h1 className="text-3xl font-bold text-[var(--on-surface)] mb-2">
-              Welcome Back!
+              Welcome back
             </h1>
             <p className="text-[var(--on-surface-variant)]">
               Sign in to continue to your dashboard
