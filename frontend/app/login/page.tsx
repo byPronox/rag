@@ -60,50 +60,77 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex">
       {/* Left Panel - Branding & Illustration */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 relative overflow-hidden">
-        {/* Decorative background elements */}
+      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 30%, #3730a3 60%, #1e1b4b 100%)' }}>
+        {/* Animated particles/dots background */}
         <div className="absolute inset-0">
-          {/* Grid pattern */}
-          <div className="absolute inset-0 opacity-[0.07]">
+          {/* Large glowing orbs */}
+          <div className="absolute top-[20%] left-[15%] w-80 h-80 bg-indigo-500/10 rounded-full blur-[100px]" />
+          <div className="absolute bottom-[10%] right-[10%] w-96 h-96 bg-violet-500/10 rounded-full blur-[120px]" />
+          <div className="absolute top-[50%] right-[30%] w-64 h-64 bg-blue-500/10 rounded-full blur-[80px]" />
+          
+          {/* Scattered dots/particles */}
+          <div className="absolute inset-0">
+            {/* Top area dots */}
+            <div className="absolute top-[8%] left-[20%] w-1.5 h-1.5 bg-indigo-300/40 rounded-full" />
+            <div className="absolute top-[12%] left-[35%] w-1 h-1 bg-indigo-400/30 rounded-full" />
+            <div className="absolute top-[15%] right-[25%] w-2 h-2 bg-indigo-300/20 rounded-full" />
+            <div className="absolute top-[20%] right-[15%] w-1 h-1 bg-violet-400/40 rounded-full" />
+            <div className="absolute top-[10%] right-[40%] w-1.5 h-1.5 bg-blue-300/30 rounded-full" />
+            
+            {/* Middle area dots */}
+            <div className="absolute top-[35%] left-[8%] w-1 h-1 bg-indigo-400/30 rounded-full" />
+            <div className="absolute top-[40%] left-[25%] w-2 h-2 bg-violet-300/20 rounded-full" />
+            <div className="absolute top-[45%] right-[8%] w-1.5 h-1.5 bg-indigo-300/40 rounded-full" />
+            <div className="absolute top-[50%] right-[20%] w-1 h-1 bg-blue-400/30 rounded-full" />
+            <div className="absolute top-[38%] right-[35%] w-1 h-1 bg-violet-400/25 rounded-full" />
+            
+            {/* Bottom area dots */}
+            <div className="absolute bottom-[30%] left-[12%] w-1.5 h-1.5 bg-indigo-300/30 rounded-full" />
+            <div className="absolute bottom-[25%] left-[30%] w-1 h-1 bg-violet-400/40 rounded-full" />
+            <div className="absolute bottom-[35%] right-[12%] w-2 h-2 bg-indigo-300/20 rounded-full" />
+            <div className="absolute bottom-[20%] right-[30%] w-1 h-1 bg-blue-300/35 rounded-full" />
+            <div className="absolute bottom-[15%] left-[45%] w-1.5 h-1.5 bg-violet-300/30 rounded-full" />
+            <div className="absolute bottom-[8%] right-[45%] w-1 h-1 bg-indigo-400/25 rounded-full" />
+            
+            {/* Extra scattered dots */}
+            <div className="absolute top-[60%] left-[5%] w-1 h-1 bg-indigo-300/20 rounded-full" />
+            <div className="absolute top-[70%] right-[5%] w-1.5 h-1.5 bg-violet-300/30 rounded-full" />
+            <div className="absolute top-[25%] left-[5%] w-1 h-1 bg-blue-400/25 rounded-full" />
+            <div className="absolute bottom-[45%] right-[3%] w-1 h-1 bg-indigo-400/35 rounded-full" />
+          </div>
+          
+          {/* Subtle grid lines */}
+          <div className="absolute inset-0 opacity-[0.03]">
             <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
               <defs>
-                <pattern id="grid" width="4" height="4" patternUnits="userSpaceOnUse">
-                  <circle cx="1" cy="1" r="0.5" fill="white" />
+                <pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse">
+                  <path d="M 8 0 L 0 0 0 8" fill="none" stroke="white" strokeWidth="0.5" />
                 </pattern>
               </defs>
               <rect width="100%" height="100%" fill="url(#grid)" />
             </svg>
           </div>
-          
-          {/* Diagonal lines */}
-          <div className="absolute top-0 left-0 w-full h-full">
-            <div className="absolute top-[15%] left-[5%] w-48 h-[1px] bg-white/10 rotate-[30deg]" />
-            <div className="absolute top-[25%] right-[10%] w-32 h-[1px] bg-white/10 -rotate-[20deg]" />
-            <div className="absolute bottom-[20%] left-[10%] w-56 h-[1px] bg-white/10 rotate-[15deg]" />
-            <div className="absolute bottom-[35%] right-[5%] w-40 h-[1px] bg-white/10 -rotate-[25deg]" />
-          </div>
-
-          {/* Glowing orbs */}
-          <div className="absolute top-[10%] right-[20%] w-64 h-64 bg-indigo-400/20 rounded-full blur-3xl" />
-          <div className="absolute bottom-[15%] left-[10%] w-48 h-48 bg-indigo-300/15 rounded-full blur-3xl" />
         </div>
 
         {/* Content */}
-        <div className="relative z-10 flex flex-col justify-between w-full p-12">
+        <div className="relative z-10 flex flex-col w-full p-10">
           {/* Logo */}
-          <div className="flex items-center">
-            <span className="text-white font-semibold text-xl tracking-tight">RAG Intelligence</span>
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center">
+              <span className="text-white font-bold text-lg">R</span>
+            </div>
+            <span className="text-white font-semibold text-lg tracking-tight">RAG Intelligence</span>
           </div>
 
           {/* Center Content */}
-          <div className="flex-1 flex flex-col items-center justify-center">
+          <div className="flex-1 flex items-center justify-center">
             {/* Illustration Container */}
-            <div className="w-full max-w-lg p-6">
+            <div className="w-full max-w-md">
               <Image
                 src="/images/login-illustration.svg"
                 alt="Focused Developer Illustration"
-                width={500}
-                height={400}
+                width={450}
+                height={360}
                 className="w-full h-auto drop-shadow-2xl"
                 priority
               />
@@ -111,7 +138,7 @@ export default function LoginPage() {
           </div>
 
           {/* Footer */}
-          <div className="absolute bottom-6 left-6 text-indigo-200/50 text-sm">
+          <div className="text-indigo-300/50 text-sm">
             &copy; {new Date().getFullYear()} RAG Intelligence. All rights reserved.
           </div>
         </div>
