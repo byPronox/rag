@@ -60,29 +60,39 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex">
       {/* Left Panel - Branding & Illustration */}
-      <div className="hidden lg:flex lg:w-1/2 bg-primary relative overflow-hidden">
-        {/* Decorative background pattern */}
-        <div className="absolute inset-0 opacity-10">
-          <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <defs>
-              <pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse">
-                <circle cx="1" cy="1" r="0.5" fill="white" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#grid)" />
-          </svg>
-        </div>
+      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-indigo-600 via-indigo-700 to-indigo-900 relative overflow-hidden">
+        {/* Decorative background elements */}
+        <div className="absolute inset-0">
+          {/* Grid pattern */}
+          <div className="absolute inset-0 opacity-[0.07]">
+            <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <defs>
+                <pattern id="grid" width="4" height="4" patternUnits="userSpaceOnUse">
+                  <circle cx="1" cy="1" r="0.5" fill="white" />
+                </pattern>
+              </defs>
+              <rect width="100%" height="100%" fill="url(#grid)" />
+            </svg>
+          </div>
+          
+          {/* Diagonal lines */}
+          <div className="absolute top-0 left-0 w-full h-full">
+            <div className="absolute top-[15%] left-[5%] w-48 h-[1px] bg-white/10 rotate-[30deg]" />
+            <div className="absolute top-[25%] right-[10%] w-32 h-[1px] bg-white/10 -rotate-[20deg]" />
+            <div className="absolute bottom-[20%] left-[10%] w-56 h-[1px] bg-white/10 rotate-[15deg]" />
+            <div className="absolute bottom-[35%] right-[5%] w-40 h-[1px] bg-white/10 -rotate-[25deg]" />
+          </div>
 
-        {/* Decorative lines */}
-        <div className="absolute top-20 left-10 w-32 h-[1px] bg-white/20 rotate-45" />
-        <div className="absolute top-40 right-20 w-24 h-[1px] bg-white/20 -rotate-12" />
-        <div className="absolute bottom-32 left-20 w-40 h-[1px] bg-white/20 rotate-12" />
+          {/* Glowing orbs */}
+          <div className="absolute top-[10%] right-[20%] w-64 h-64 bg-indigo-400/20 rounded-full blur-3xl" />
+          <div className="absolute bottom-[15%] left-[10%] w-48 h-48 bg-indigo-300/15 rounded-full blur-3xl" />
+        </div>
 
         {/* Content */}
         <div className="relative z-10 flex flex-col justify-between w-full p-12">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+            <div className="w-11 h-11 bg-white/10 rounded-xl flex items-center justify-center backdrop-blur-sm border border-white/10">
               <svg
                 className="w-6 h-6 text-white"
                 fill="none"
@@ -97,38 +107,38 @@ export default function LoginPage() {
                 />
               </svg>
             </div>
-            <span className="text-white font-semibold text-xl">RAG Intelligence</span>
+            <span className="text-white font-semibold text-xl tracking-tight">RAG Intelligence</span>
           </div>
 
           {/* Center Content */}
-          <div className="flex-1 flex flex-col items-center justify-center -mt-8">
-            {/* Illustration */}
-            <div className="w-full max-w-md mb-10">
+          <div className="flex-1 flex flex-col items-center justify-center">
+            {/* Illustration Container */}
+            <div className="w-full max-w-lg mb-10 p-6">
               <Image
-                src="/images/login-illustration.png"
-                alt="AI Document Analysis Illustration"
-                width={400}
-                height={300}
+                src="/images/login-illustration.svg"
+                alt="Focused Developer Illustration"
+                width={500}
+                height={400}
                 className="w-full h-auto drop-shadow-2xl"
                 priority
               />
             </div>
 
             {/* Welcome Text */}
-            <div className="text-center">
-              <h2 className="text-4xl font-bold text-white mb-4">
-                Welcome to
+            <div className="text-center max-w-md">
+              <h2 className="text-4xl font-bold text-white mb-4 leading-tight">
+                Analyze Documents
                 <br />
-                RAG Intelligence
+                <span className="text-indigo-200">with AI Power</span>
               </h2>
-              <p className="text-white/80 text-lg max-w-sm leading-relaxed">
-                Analyze your documents with AI. Get instant insights and answers from your data.
+              <p className="text-indigo-100/80 text-lg leading-relaxed">
+                Transform your documents into actionable insights. Ask questions, get instant answers.
               </p>
             </div>
           </div>
 
           {/* Footer */}
-          <div className="text-white/60 text-sm">
+          <div className="text-indigo-200/50 text-sm">
             &copy; {new Date().getFullYear()} RAG Intelligence. All rights reserved.
           </div>
         </div>
