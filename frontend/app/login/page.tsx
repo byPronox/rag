@@ -115,10 +115,7 @@ export default function LoginPage() {
         {/* Content */}
         <div className="relative z-10 flex flex-col w-full p-10">
           {/* Logo */}
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center">
-              <span className="text-white font-bold text-lg">R</span>
-            </div>
+          <div className="flex items-center">
             <span className="text-white font-semibold text-lg tracking-tight">RAG Intelligence</span>
           </div>
 
