@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth-context"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { InteractiveParticles } from "@/components/ui/interactive-particles"
 
 export default function LoginPage() {
   const router = useRouter()
@@ -61,56 +62,8 @@ export default function LoginPage() {
     <div className="min-h-screen flex">
       {/* Left Panel - Branding & Illustration */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 30%, #3730a3 60%, #1e1b4b 100%)' }}>
-        {/* Animated particles/dots background */}
-        <div className="absolute inset-0">
-          {/* Large glowing orbs */}
-          <div className="absolute top-[20%] left-[15%] w-80 h-80 bg-indigo-500/10 rounded-full blur-[100px]" />
-          <div className="absolute bottom-[10%] right-[10%] w-96 h-96 bg-violet-500/10 rounded-full blur-[120px]" />
-          <div className="absolute top-[50%] right-[30%] w-64 h-64 bg-blue-500/10 rounded-full blur-[80px]" />
-          
-          {/* Scattered dots/particles */}
-          <div className="absolute inset-0">
-            {/* Top area dots */}
-            <div className="absolute top-[8%] left-[20%] w-1.5 h-1.5 bg-indigo-300/40 rounded-full" />
-            <div className="absolute top-[12%] left-[35%] w-1 h-1 bg-indigo-400/30 rounded-full" />
-            <div className="absolute top-[15%] right-[25%] w-2 h-2 bg-indigo-300/20 rounded-full" />
-            <div className="absolute top-[20%] right-[15%] w-1 h-1 bg-violet-400/40 rounded-full" />
-            <div className="absolute top-[10%] right-[40%] w-1.5 h-1.5 bg-blue-300/30 rounded-full" />
-            
-            {/* Middle area dots */}
-            <div className="absolute top-[35%] left-[8%] w-1 h-1 bg-indigo-400/30 rounded-full" />
-            <div className="absolute top-[40%] left-[25%] w-2 h-2 bg-violet-300/20 rounded-full" />
-            <div className="absolute top-[45%] right-[8%] w-1.5 h-1.5 bg-indigo-300/40 rounded-full" />
-            <div className="absolute top-[50%] right-[20%] w-1 h-1 bg-blue-400/30 rounded-full" />
-            <div className="absolute top-[38%] right-[35%] w-1 h-1 bg-violet-400/25 rounded-full" />
-            
-            {/* Bottom area dots */}
-            <div className="absolute bottom-[30%] left-[12%] w-1.5 h-1.5 bg-indigo-300/30 rounded-full" />
-            <div className="absolute bottom-[25%] left-[30%] w-1 h-1 bg-violet-400/40 rounded-full" />
-            <div className="absolute bottom-[35%] right-[12%] w-2 h-2 bg-indigo-300/20 rounded-full" />
-            <div className="absolute bottom-[20%] right-[30%] w-1 h-1 bg-blue-300/35 rounded-full" />
-            <div className="absolute bottom-[15%] left-[45%] w-1.5 h-1.5 bg-violet-300/30 rounded-full" />
-            <div className="absolute bottom-[8%] right-[45%] w-1 h-1 bg-indigo-400/25 rounded-full" />
-            
-            {/* Extra scattered dots */}
-            <div className="absolute top-[60%] left-[5%] w-1 h-1 bg-indigo-300/20 rounded-full" />
-            <div className="absolute top-[70%] right-[5%] w-1.5 h-1.5 bg-violet-300/30 rounded-full" />
-            <div className="absolute top-[25%] left-[5%] w-1 h-1 bg-blue-400/25 rounded-full" />
-            <div className="absolute bottom-[45%] right-[3%] w-1 h-1 bg-indigo-400/35 rounded-full" />
-          </div>
-          
-          {/* Subtle grid lines */}
-          <div className="absolute inset-0 opacity-[0.03]">
-            <svg className="w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <defs>
-                <pattern id="grid" width="8" height="8" patternUnits="userSpaceOnUse">
-                  <path d="M 8 0 L 0 0 0 8" fill="none" stroke="white" strokeWidth="0.5" />
-                </pattern>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#grid)" />
-            </svg>
-          </div>
-        </div>
+        {/* Interactive particles background */}
+        <InteractiveParticles />
 
         {/* Content */}
         <div className="relative z-10 flex flex-col w-full p-10">
@@ -125,18 +78,13 @@ export default function LoginPage() {
             <div className="w-full max-w-md">
               <Image
                 src="/images/login-illustration.svg"
-                alt="Focused Developer Illustration"
+                alt="Data Analysis Illustration"
                 width={450}
                 height={360}
                 className="w-full h-auto drop-shadow-2xl"
                 priority
               />
             </div>
-          </div>
-
-          {/* Footer */}
-          <div className="text-indigo-300/50 text-sm">
-            &copy; {new Date().getFullYear()} RAG Intelligence. All rights reserved.
           </div>
         </div>
       </div>
