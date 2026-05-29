@@ -348,22 +348,15 @@ export async function getSearchHistory(companyId: string): Promise<SearchQuery[]
 
 // User Settings
 export async function updateUserPassword(data: any): Promise<{message: string}> {
-  return apiRequest<{message: string}>(USER_ENDPOINTS.settings.password, {
-    method: "PUT",
-    body: JSON.stringify(data),
-  })
+  return apiPut<{message: string}>(USER_ENDPOINTS.settings.password, data)
 }
 
 export async function logoutAllDevices(): Promise<{message: string}> {
-  return apiRequest<{message: string}>(USER_ENDPOINTS.settings.logoutAll, {
-    method: "POST",
-  })
+  return apiPost<{message: string}>(USER_ENDPOINTS.settings.logoutAll, {})
 }
 
-export async function regenerateUserApiKey(): Promise<{message: string, api_key: string}> {
-  return apiRequest<{message: string, api_key: string}>(USER_ENDPOINTS.settings.regenerateApiKey, {
-    method: "POST",
-  })
+export async function regenerateMyApiKey(): Promise<{message: string, api_key: string}> {
+  return apiPost<{message: string, api_key: string}>(USER_ENDPOINTS.settings.regenerateApiKey, {})
 }
 
 // ==========================================

@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useAuth } from "@/lib/auth-context"
-import { updateUserPassword, logoutAllDevices, regenerateUserApiKey } from "@/lib/api"
+import { updateUserPassword, logoutAllDevices, regenerateMyApiKey } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
@@ -92,7 +92,7 @@ export default function UserSettingsPage() {
 
     setIsRegeneratingKey(true)
     try {
-      const res = await regenerateUserApiKey()
+      const res = await regenerateMyApiKey()
       // Update local context user with new key to avoid needing a refresh
       if (user) {
         login({ ...user, api_key: res.api_key })
