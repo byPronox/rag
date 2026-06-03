@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
+import { createPortal } from "react-dom"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
@@ -11,7 +12,12 @@ export function UserMenu() {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [mounted, setMounted] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Cierra el menú si haces clic afuera
   useEffect(() => {
@@ -51,14 +57,15 @@ export function UserMenu() {
 
   return (
     <div className="relative" ref={menuRef}>
-      {/* Overlay de cierre de sesión (UX Moderno) */}
-      {isLoggingOut && (
+      {/* Logout Overlay */}
+      {isLoggingOut && mounted && createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="flex flex-col items-center gap-4 bg-card px-8 py-6 rounded-2xl shadow-2xl border border-border animate-in zoom-in-95 duration-300">
+          <div className="flex flex-col items-center justify-center gap-4 bg-card px-8 py-6 rounded-2xl shadow-2xl border border-border animate-in zoom-in-95 duration-300">
             <div className="size-10 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-            <p className="text-foreground font-medium text-sm animate-pulse">Cerrando sesión...</p>
+            <p className="text-foreground font-medium text-sm animate-pulse">Logging out...</p>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* El Avatar que se puede clickear */}
@@ -77,7 +84,7 @@ export function UserMenu() {
               {user.email}
             </p>
             <p className="text-xs text-muted-foreground mt-1 capitalize">
-              Rol: {user.role}
+              Role: {user.role}
             </p>
           </div>
           
@@ -106,14 +113,14 @@ export function UserMenu() {
 
             <div className="h-px bg-border/50 my-1 mx-2" />
 
-            {/* Opción Logout */}
+            {/* Logout Option */}
             <button 
               onClick={handleLogout}
               disabled={isLoggingOut}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md text-destructive hover:bg-destructive/10 cursor-pointer transition-colors disabled:opacity-50"
             >
               <LogOut className="w-4 h-4" />
-              Cerrar sesión
+              Logout
             </button>
           </div>
         </div>
