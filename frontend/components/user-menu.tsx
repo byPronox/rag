@@ -10,6 +10,7 @@ export function UserMenu() {
   const { user, logout, isAuthenticated, isLoading } = useAuth()
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Cierra el menú si haces clic afuera
@@ -23,8 +24,9 @@ export function UserMenu() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const handleLogout = () => {
-    logout()
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    await logout()
     setIsOpen(false)
     router.push("/login")
   }
@@ -49,6 +51,16 @@ export function UserMenu() {
 
   return (
     <div className="relative" ref={menuRef}>
+      {/* Overlay de cierre de sesión (UX Moderno) */}
+      {isLoggingOut && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="flex flex-col items-center gap-4 bg-card px-8 py-6 rounded-2xl shadow-2xl border border-border animate-in zoom-in-95 duration-300">
+            <div className="size-10 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+            <p className="text-foreground font-medium text-sm animate-pulse">Cerrando sesión...</p>
+          </div>
+        </div>
+      )}
+
       {/* El Avatar que se puede clickear */}
       <button 
         onClick={() => setIsOpen(!isOpen)}
@@ -97,7 +109,8 @@ export function UserMenu() {
             {/* Opción Logout */}
             <button 
               onClick={handleLogout}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
+              disabled={isLoggingOut}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md text-destructive hover:bg-destructive/10 cursor-pointer transition-colors disabled:opacity-50"
             >
               <LogOut className="w-4 h-4" />
               Cerrar sesión
