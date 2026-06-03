@@ -28,13 +28,6 @@ export default function HistoryPage() {
   const [searchSearchQuery, setSearchSearchQuery] = useState("")
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll to bottom when session or messages change
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView()
-    }
-  }, [selectedSessionId, activeSessionMessages])
-
   useEffect(() => {
     async function fetchHistory() {
       if (activeCompany) {
@@ -106,6 +99,13 @@ export default function HistoryPage() {
       .filter(m => m.session_id === selectedSessionId)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   }, [chatHistory, selectedSessionId])
+
+  // Auto-scroll to bottom when session or messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView()
+    }
+  }, [selectedSessionId, activeSessionMessages])
 
   // Filter Search History
   const filteredSearchHistory = useMemo(() => {
