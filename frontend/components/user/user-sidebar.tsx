@@ -40,13 +40,10 @@ export function UserSidebar() {
     <aside className="hidden md:flex md:w-64 md:flex-col md:fixed md:inset-y-0">
       <div className="flex flex-col flex-grow bg-card border-r border-border pt-5 overflow-y-auto">
         {/* Logo */}
-        <div className="flex items-center gap-3 px-6 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold text-sm">
-            R
-          </div>
+        <div className="flex items-center gap-3 px-6 mb-8 mt-2">
           <div>
-            <h1 className="text-lg font-bold text-foreground leading-none">RAG Intelligence</h1>
-            <p className="text-xs text-muted-foreground uppercase tracking-wider mt-0.5">User Panel</p>
+            <span className="font-semibold text-lg tracking-tight text-foreground">RAG Intelligence</span>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">User Panel</p>
           </div>
         </div>
 
