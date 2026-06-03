@@ -246,8 +246,8 @@ export default function HistoryPage() {
                       </div>
                    </div>
                    
-                   <ScrollArea className="flex-1 p-6">
-                     <div className="space-y-6 max-w-3xl mx-auto pb-4">
+                   <ScrollArea className="flex-1">
+                     <div className="p-6 space-y-6 max-w-3xl mx-auto pb-8">
                        {activeSessionMessages.map((msg, i) => {
                          const isUser = msg.role === 'user'
                          return (
