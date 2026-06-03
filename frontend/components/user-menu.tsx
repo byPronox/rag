@@ -1,23 +1,14 @@
 "use client"
 
 import { useState, useRef, useEffect } from "react"
-import { createPortal } from "react-dom"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { User, Shield, LayoutDashboard, LogOut } from "lucide-react"
 
 export function UserMenu() {
-  const { user, logout, isAuthenticated, isLoading } = useAuth()
-  const router = useRouter()
+  const { user, logout, isAuthenticated, isLoading, isLoggingOut } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
-  const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const [mounted, setMounted] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    setMounted(true)
-  }, [])
 
   // Cierra el menú si haces clic afuera
   useEffect(() => {
@@ -30,11 +21,9 @@ export function UserMenu() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const handleLogout = async () => {
-    setIsLoggingOut(true)
-    await logout()
+  const handleLogout = () => {
+    logout()
     setIsOpen(false)
-    router.push("/login")
   }
 
   // Mientras carga la sesión, mostramos un esqueleto o nada
@@ -57,17 +46,6 @@ export function UserMenu() {
 
   return (
     <div className="relative" ref={menuRef}>
-      {/* Logout Overlay */}
-      {isLoggingOut && mounted && createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="flex flex-col items-center justify-center gap-4 bg-card px-8 py-6 rounded-2xl shadow-2xl border border-border animate-in zoom-in-95 duration-300">
-            <div className="size-10 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
-            <p className="text-foreground font-medium text-sm animate-pulse">Logging out...</p>
-          </div>
-        </div>,
-        document.body
-      )}
-
       {/* El Avatar que se puede clickear */}
       <button 
         onClick={() => setIsOpen(!isOpen)}

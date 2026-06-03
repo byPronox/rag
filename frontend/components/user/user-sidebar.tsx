@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
 import {
   LayoutDashboard,
@@ -28,12 +28,10 @@ const secondaryNavigation = [
 
 export function UserSidebar() {
   const pathname = usePathname()
-  const { logout, user } = useAuth()
-  const router = useRouter()
+  const { logout, user, isLoggingOut } = useAuth()
 
   const handleLogout = () => {
     logout()
-    router.push("/login")
   }
 
   return (
@@ -94,7 +92,8 @@ export function UserSidebar() {
           
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-destructive/10 hover:text-destructive w-full"
+            disabled={isLoggingOut}
+            className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-destructive/10 hover:text-destructive w-full disabled:opacity-50"
           >
             <LogOut className="w-5 h-5" />
             Logout
