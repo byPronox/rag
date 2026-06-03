@@ -11,6 +11,9 @@
         return;
     }
 
+    // Generar un ID de sesión ÚNICO por carga de página para mantener el historial
+    const sessionId = 'web_search_' + Date.now();
+
     // 2. URL y Configuración de Estilo
     let RAG_API_URL = localConfig.apiUrl; 
     if (RAG_API_URL && !RAG_API_URL.startsWith('http')) {
@@ -177,7 +180,8 @@
                 },
                 body: JSON.stringify({ 
                     query: query, 
-                    company_id: localConfig.companyId 
+                    company_id: localConfig.companyId,
+                    session_id: sessionId
                 })
             });
 

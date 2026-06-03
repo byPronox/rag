@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useRef, useEffect } from "react"
 import { testSemanticSearch, SearchResult } from "@/lib/api"
 import { useAuth } from "@/lib/auth-context"
 import { useCompany } from "@/lib/company-context"
@@ -19,6 +19,11 @@ export default function DemoPage() {
   const [isSearching, setIsSearching] = useState(false)
   const [hasSearched, setHasSearched] = useState(false)
   const [showAuthCTA, setShowAuthCTA] = useState(false)
+  const sessionIdRef = useRef<string>("")
+
+  useEffect(() => {
+    sessionIdRef.current = 'demo_search_' + Date.now()
+  }, [])
 
   const handleSearch = async (query: string) => {
     setIsSearching(true)
@@ -54,7 +59,7 @@ export default function DemoPage() {
       }
 
       // Pasamos la llave real al Microservicio 3
-      const results = await testSemanticSearch(query, activeCompany.company_id, userApiKey)
+      const results = await testSemanticSearch(query, activeCompany.company_id, userApiKey, sessionIdRef.current)
       setSearchResults(results)
     } catch (error) {
       console.error("[RAG Error] Search failed:", error)

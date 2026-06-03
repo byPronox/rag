@@ -373,7 +373,7 @@ export interface SearchResult {
   image_url?: string;
 }
 
-export async function testSemanticSearch(query: string, companyId: string, apiKey: string): Promise<SearchResult[]> {
+export async function testSemanticSearch(query: string, companyId: string, apiKey: string, sessionId?: string): Promise<SearchResult[]> {
   const url = `${RAG_ENDPOINTS.search}`;
   
   if (!apiKey) throw new Error("API Key faltante en la búsqueda");
@@ -384,7 +384,7 @@ export async function testSemanticSearch(query: string, companyId: string, apiKe
       "Content-Type": "application/json",
       "x-api-key": apiKey
     },
-    body: JSON.stringify({ query: query, company_id: companyId }),
+    body: JSON.stringify({ query: query, company_id: companyId, session_id: sessionId }),
   });
 
   if (!response.ok) {
