@@ -104,6 +104,7 @@ export function InteractiveParticles() {
             y: newY,
             vx: newVx,
             vy: newVy,
+          }
         })
       )
       animationRef.current = requestAnimationFrame(animate)
