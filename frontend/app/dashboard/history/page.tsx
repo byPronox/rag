@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { useCompany } from "@/lib/company-context"
 import { getChatHistory, getSearchHistory, ChatMessage, SearchQuery } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -26,7 +26,6 @@ export default function HistoryPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [chatSearchQuery, setChatSearchQuery] = useState("")
   const [searchSearchQuery, setSearchSearchQuery] = useState("")
-  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     async function fetchHistory() {
@@ -99,13 +98,6 @@ export default function HistoryPage() {
       .filter(m => m.session_id === selectedSessionId)
       .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   }, [chatHistory, selectedSessionId])
-
-  // Auto-scroll to bottom when session or messages change
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView()
-    }
-  }, [selectedSessionId, activeSessionMessages])
 
   // Filter Search History
   const filteredSearchHistory = useMemo(() => {
@@ -198,10 +190,10 @@ export default function HistoryPage() {
         </TabsList>
 
         <TabsContent value="chat" className="flex-1 flex flex-col h-full mt-0 border border-border rounded-xl overflow-hidden bg-card shadow-sm">
-          <div className="flex flex-col md:flex-row h-full">
+          <div className="flex flex-col md:flex-row h-full overflow-hidden">
             {/* Left Pane: Sessions List */}
-            <div className="w-full md:w-80 lg:w-96 border-b md:border-b-0 md:border-r border-border flex flex-col bg-muted/20">
-               <div className="p-4 border-b border-border bg-card">
+            <div className="w-full md:w-80 lg:w-96 border-b md:border-b-0 md:border-r border-border flex flex-col bg-muted/20 overflow-hidden">
+               <div className="p-4 border-b border-border bg-card shrink-0">
                  <div className="relative">
                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                    <Input 
@@ -239,10 +231,10 @@ export default function HistoryPage() {
             </div>
 
             {/* Right Pane: WhatsApp Style Chat Viewer */}
-            <div className="flex-1 flex flex-col bg-background relative h-[500px] md:h-auto min-h-0">
+            <div className="flex-1 flex flex-col bg-background relative overflow-hidden">
                {selectedSessionId ? (
                  <>
-                   <div className="h-14 border-b border-border bg-card flex items-center px-6 sticky top-0 z-10 shadow-sm">
+                   <div className="h-14 border-b border-border bg-card flex items-center px-6 sticky top-0 z-10 shadow-sm shrink-0">
                       <div className="flex items-center gap-3">
                          <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center">
                            <User className="w-4 h-4 text-primary" />
@@ -289,7 +281,6 @@ export default function HistoryPage() {
                            </div>
                          )
                        })}
-                       <div ref={messagesEndRef} />
                      </div>
                    </ScrollArea>
                  </>
