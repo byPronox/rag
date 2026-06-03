@@ -4,8 +4,8 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Image from "next/image"
-import { login as apiLogin } from "@/lib/api"
-import { useAuth } from "@/lib/auth-context"
+import { login as apiLogin, apiGet, AUTH_ENDPOINTS } from "@/lib/api"
+import { useAuth, type User } from "@/lib/auth-context"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
@@ -35,10 +35,14 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      const response = await apiLogin(email, password)
-      login(response.user)
+      await apiLogin(email, password)
       
-      if (response.user.role === "admin") {
+      // Fetch full user data including api_key from /me endpoint
+      const userData = await apiGet<User>(AUTH_ENDPOINTS.me)
+      
+      login(userData)
+      
+      if (userData.role === "admin") {
         router.push("/admin")
       } else {
         router.push("/dashboard")
