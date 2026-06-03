@@ -155,7 +155,7 @@ export default function UserDashboardPage() {
             Real-time metrics for <span className="font-medium text-foreground">{activeCompany.name}</span>
           </p>
         </div>
-        <Button className="gap-2">
+        <Button onClick={() => window.print()} className="gap-2 print:hidden">
           <Download className="h-4 w-4" />
           Export Report
         </Button>

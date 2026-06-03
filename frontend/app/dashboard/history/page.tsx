@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { useCompany } from "@/lib/company-context"
 import { getChatHistory, getSearchHistory, ChatMessage, SearchQuery } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -26,6 +26,14 @@ export default function HistoryPage() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null)
   const [chatSearchQuery, setChatSearchQuery] = useState("")
   const [searchSearchQuery, setSearchSearchQuery] = useState("")
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll to bottom when session or messages change
+  useEffect(() => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView()
+    }
+  }, [selectedSessionId, activeSessionMessages])
 
   useEffect(() => {
     async function fetchHistory() {
@@ -231,7 +239,7 @@ export default function HistoryPage() {
             </div>
 
             {/* Right Pane: WhatsApp Style Chat Viewer */}
-            <div className="flex-1 flex flex-col bg-background relative h-[500px] md:h-auto">
+            <div className="flex-1 flex flex-col bg-background relative h-[500px] md:h-auto min-h-0">
                {selectedSessionId ? (
                  <>
                    <div className="h-14 border-b border-border bg-card flex items-center px-6 sticky top-0 z-10 shadow-sm">
@@ -281,6 +289,7 @@ export default function HistoryPage() {
                            </div>
                          )
                        })}
+                       <div ref={messagesEndRef} />
                      </div>
                    </ScrollArea>
                  </>
