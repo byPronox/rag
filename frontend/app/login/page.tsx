@@ -65,11 +65,13 @@ export default function LoginPage() {
         {/* Interactive particles background */}
         <InteractiveParticles />
 
-        {/* Content */}
-        <div className="relative z-10 flex flex-col w-full p-10">
+        {/* Content - Set pointer-events-none to let particles receive mouse events */}
+        <div className="relative z-10 flex flex-col w-full p-10 pointer-events-none">
           {/* Logo */}
-          <div className="flex items-center">
-            <span className="text-white font-semibold text-lg tracking-tight">RAG Intelligence</span>
+          <div className="flex items-center pointer-events-auto w-fit">
+            <Link href="/" className="text-white font-semibold text-lg tracking-tight hover:opacity-80 transition-opacity">
+              RAG Intelligence
+            </Link>
           </div>
 
           {/* Center Content */}
@@ -94,22 +96,9 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* Mobile Logo - Only visible on small screens */}
           <div className="lg:hidden flex items-center justify-center gap-3 mb-10">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <svg
-                className="w-6 h-6 text-white"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              </svg>
-            </div>
-            <span className="text-[var(--on-surface)] font-semibold text-xl">RAG Intelligence</span>
+            <Link href="/" className="text-[var(--on-surface)] font-semibold text-xl hover:opacity-80 transition-opacity">
+              RAG Intelligence
+            </Link>
           </div>
 
           {/* Header */}

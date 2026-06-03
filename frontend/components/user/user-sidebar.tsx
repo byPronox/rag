@@ -42,7 +42,9 @@ export function UserSidebar() {
         {/* Logo */}
         <div className="flex items-center gap-3 px-6 mb-8 mt-2">
           <div>
-            <span className="font-semibold text-lg tracking-tight text-foreground">RAG Intelligence</span>
+            <Link href="/" className="font-semibold text-lg tracking-tight text-foreground hover:opacity-80 transition-opacity">
+              RAG Intelligence
+            </Link>
             <p className="text-xs text-muted-foreground uppercase tracking-wider mt-1">User Panel</p>
           </div>
         </div>
