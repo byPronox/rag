@@ -6,8 +6,8 @@ interface Particle {
   id: number
   x: number
   y: number
-  baseX: number
-  baseY: number
+  vx: number
+  vy: number
   size: number
   opacity: number
   color: string
@@ -37,8 +37,8 @@ export function InteractiveParticles() {
         id: i,
         x,
         y,
-        baseX: x,
-        baseY: y,
+        vx: (Math.random() - 0.5) * 0.15,
+        vy: (Math.random() - 0.5) * 0.15,
         size: Math.random() * 4 + 2,
         opacity: Math.random() * 0.4 + 0.1,
         color: colors[Math.floor(Math.random() * colors.length)],
@@ -80,26 +80,30 @@ export function InteractiveParticles() {
           const distance = Math.sqrt(dx * dx + dy * dy)
           const maxDistance = 15
 
-          let newX = particle.x
-          let newY = particle.y
+          // Smooth continuous drift
+          let newX = particle.x + particle.vx
+          let newY = particle.y + particle.vy
+          let newVx = particle.vx
+          let newVy = particle.vy
+
+          // Gentle bounce off the screen boundaries (0 to 100%)
+          if (newX < 0 || newX > 100) newVx = -newVx
+          if (newY < 0 || newY > 100) newVy = -newVy
 
           if (distance < maxDistance && distance > 0) {
             // Push particles away from cursor
             const force = (maxDistance - distance) / maxDistance
             const angle = Math.atan2(dy, dx)
-            newX = particle.x - Math.cos(angle) * force * 8
-            newY = particle.y - Math.sin(angle) * force * 8
-          } else {
-            // Return to base position with easing
-            newX = particle.x + (particle.baseX - particle.x) * 0.05
-            newY = particle.y + (particle.baseY - particle.y) * 0.05
+            newX = newX - Math.cos(angle) * force * 3
+            newY = newY - Math.sin(angle) * force * 3
           }
 
           return {
             ...particle,
             x: newX,
             y: newY,
-          }
+            vx: newVx,
+            vy: newVy,
         })
       )
       animationRef.current = requestAnimationFrame(animate)
