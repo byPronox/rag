@@ -6,7 +6,7 @@ import { getCompanyProducts, ProductItem } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Spinner } from "@/components/ui/spinner"
+import { Skeleton } from "@/components/ui/skeleton"
 import { PackageSearch, ExternalLink, Image as ImageIcon, Search, Tag, DollarSign, Box } from "lucide-react"
 
 export default function ProductsPage() {
@@ -44,8 +44,25 @@ export default function ProductsPage() {
 
   if (isLoadingCompanies || isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Spinner className="w-8 h-8 text-primary" />
+      <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        
+        <div className="border border-border rounded-xl bg-card overflow-hidden">
+          <div className="p-4 border-b border-border bg-muted/20">
+            <Skeleton className="h-6 w-1/4" />
+          </div>
+          <div className="p-4 space-y-4">
+            {Array.from({length: 6}).map((_, i) => (
+               <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        </div>
       </div>
     )
   }

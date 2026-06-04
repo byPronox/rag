@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Spinner } from "@/components/ui/spinner"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Settings, Key, ShieldAlert, LogOut, RefreshCw, Eye, EyeOff, Copy, Check } from "lucide-react"
 
 export default function UserSettingsPage() {

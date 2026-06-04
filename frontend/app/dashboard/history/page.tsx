@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Spinner } from "@/components/ui/spinner"
+import { Skeleton } from "@/components/ui/skeleton"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Download, Search, MessageSquare, Clock, User, Bot, History, Calendar } from "lucide-react"
 import { format, parseISO } from "date-fns"
@@ -145,8 +145,16 @@ export default function HistoryPage() {
 
   if (isLoadingCompanies || isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Spinner className="w-8 h-8 text-primary" />
+      <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto">
+        <div className="space-y-2">
+           <Skeleton className="h-8 w-48" />
+           <Skeleton className="h-4 w-72" />
+        </div>
+        <Skeleton className="h-10 w-64 mb-6" />
+        <div className="grid gap-6 md:grid-cols-[1fr_300px]">
+           <Skeleton className="h-[600px] w-full" />
+           <Skeleton className="h-[600px] w-full" />
+        </div>
       </div>
     )
   }

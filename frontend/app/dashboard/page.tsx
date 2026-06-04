@@ -4,8 +4,8 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useCompany } from "@/lib/company-context"
 import { getDashboardMetrics, DashboardMetrics, ActivityItem } from "@/lib/api"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { formatDistanceToNow } from "date-fns"
 import {
@@ -121,10 +121,25 @@ export default function UserDashboardPage() {
     fetchMetrics()
   }, [activeCompany])
 
-  if (isLoadingCompanies || isLoading) {
+  if (isLoadingCompanies || !metrics) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <Spinner className="w-8 h-8 text-primary" />
+      <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+           {Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-7">
+           <Skeleton className="md:col-span-4 h-[400px] w-full" />
+           <Skeleton className="md:col-span-3 h-[400px] w-full" />
+        </div>
       </div>
     )
   }
