@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Spinner } from "@/components/ui/spinner"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Dialog,
   DialogContent,
@@ -316,7 +316,28 @@ export default function UsersPage() {
   })
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-[50vh]"><Spinner className="w-8 h-8 text-primary" /></div>
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        
+        <div className="border border-border rounded-xl bg-card overflow-hidden">
+          <div className="p-4 border-b border-border bg-muted/20">
+            <Skeleton className="h-6 w-1/4" />
+          </div>
+          <div className="p-4 space-y-4">
+            {Array.from({length: 6}).map((_, i) => (
+               <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (

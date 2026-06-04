@@ -7,6 +7,7 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Brain, Sparkles, Settings2, RefreshCw } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
+import { Skeleton } from "@/components/ui/skeleton"
 import { getModels, updateModel, syncModels, AIModel } from "@/lib/api"
 
 function ModelCard({ model, onToggle }: { model: AIModel; onToggle: (model: AIModel) => void }) {
@@ -115,7 +116,21 @@ export default function ModelsPage() {
   const embeddingModels = models.filter((m) => m.type === "embedding")
 
   if (isLoading) {
-    return <div className="flex items-center justify-center min-h-[50vh]"><Spinner className="w-8 h-8 text-primary" /></div>
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+           {Array.from({length: 6}).map((_, i) => <Skeleton key={i} className="h-48 w-full" />)}
+        </div>
+      </div>
+    )
   }
 
   return (
