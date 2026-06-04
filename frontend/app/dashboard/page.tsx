@@ -6,6 +6,7 @@ import { useCompany } from "@/lib/company-context"
 import { getDashboardMetrics, DashboardMetrics, ActivityItem } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { formatDistanceToNow } from "date-fns"
 import {
