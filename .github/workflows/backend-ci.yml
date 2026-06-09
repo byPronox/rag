@@ -46,6 +46,10 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
     - name: Run unit tests with pytest
+      env:
+        DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy_db"
+        GROQ_API_KEY: "dummy_key_solo_para_tests"
+        SECRET_KEY: "dummy_secret_jwt_para_tests"
       run: |
         cd ${{ matrix.microservice }}
         # Run pytest if a tests/ directory or test files exist
