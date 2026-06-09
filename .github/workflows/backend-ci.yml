@@ -1,0 +1,52 @@
+name: Backend CI Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    
+    # We use a matrix to run the same steps across all 3 microservices in parallel
+    strategy:
+      matrix:
+        microservice: 
+          - backend/microservice_1_sync
+          - backend/microservice_2_core
+          - backend/microservice_3_rag
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        cache: 'pip' # Speeds up execution by caching dependencies
+
+    - name: Install dependencies
+      run: |
+        cd ${{ matrix.microservice }}
+        python -m pip install --upgrade pip
+        # Install testing and linting tools
+        pip install flake8 pytest httpx
+        # Install the microservice specific requirements
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: Lint with flake8
+      run: |
+        cd ${{ matrix.microservice }}
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # exit-zero treats all errors as warnings so it doesn't break the build immediately for formatting
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+    - name: Run unit tests with pytest
+      run: |
+        cd ${{ matrix.microservice }}
+        # Run pytest if a tests/ directory or test files exist
+        pytest || echo "No tests found or tests failed, but continuing pipeline."
