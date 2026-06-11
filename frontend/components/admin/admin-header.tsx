@@ -33,15 +33,6 @@ export function AdminHeader({ title = "RAG Intelligence Admin", onMenuClick }: A
         
         <h2 className="text-lg font-semibold text-foreground hidden md:block">{title}</h2>
         
-        {/* Search */}
-        <div className="relative hidden sm:block">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Search users, logs..."
-            className="pl-9 w-64 bg-muted/50 border-border"
-          />
-        </div>
       </div>
 
       <div className="flex items-center gap-2">

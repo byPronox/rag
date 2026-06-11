@@ -27,9 +27,16 @@ export const USER_ENDPOINTS = {
   companies: `${CORE_API_URL}/api/v1/user/companies`,
   config: `${CORE_API_URL}/api/v1/user/config`,
   models: `${CORE_API_URL}/api/v1/user/models`,
+  products: `${CORE_API_URL}/api/v1/user/products`,
+  dashboardMetrics: `${CORE_API_URL}/api/v1/user/dashboard-metrics`,
   metrics: `${CORE_API_URL}/api/v1/user/metrics`,
-  chatHistory: `${CORE_API_URL}/api/v1/user/chat-history`,
-  searchHistory: `${CORE_API_URL}/api/v1/user/search-history`,
+  chatHistory: `${CORE_API_URL}/api/v1/user/history/chat`,
+  searchHistory: `${CORE_API_URL}/api/v1/user/history/search`,
+  settings: {
+    password: `${CORE_API_URL}/api/v1/user/settings/password`,
+    logoutAll: `${CORE_API_URL}/api/v1/user/settings/logout-all`,
+    regenerateApiKey: `${CORE_API_URL}/api/v1/user/settings/api-key/regenerate`
+  }
 }
 
 // RAG endpoints -> Usan el RAG API (Microservicio 3)
@@ -273,6 +280,45 @@ export async function updateCompanyConfig(companyId: string, config: Partial<Com
   return apiPut<{message: string}>(`${USER_ENDPOINTS.config}/${companyId}`, config as Record<string, unknown>)
 }
 
+// NUEVO: Obtener los productos exportados para una compañía
+export interface ProductItem {
+  variant_id: number;
+  sku: string;
+  name: string;
+  description?: string;
+  price_excluded: number;
+  price_included: number;
+  stock: number;
+  category: string;
+  website_url?: string;
+  image_128_url?: string;
+  image_512_url?: string;
+  company_id: string;
+}
+
+export async function getCompanyProducts(companyId: string): Promise<ProductItem[]> {
+  return apiGet<ProductItem[]>(`${USER_ENDPOINTS.products}/${companyId}`)
+}
+
+export interface ActivityItem {
+  type: string;
+  detail: string;
+  time: string;
+  status: string;
+}
+
+export interface DashboardMetrics {
+  total_products: number;
+  total_chats: number;
+  total_searches: number;
+  tokens_used: number;
+  recent_activity: ActivityItem[];
+}
+
+export async function getDashboardMetrics(companyId: string): Promise<DashboardMetrics> {
+  return apiGet<DashboardMetrics>(`${USER_ENDPOINTS.dashboardMetrics}/${companyId}`)
+}
+
 // Historiales (Estos también requerirán filtrar por company_id en el backend más adelante, 
 // pero por ahora mantenemos las interfaces como están para que no se rompan tus tablas)
 export interface ChatMessage {
@@ -280,21 +326,37 @@ export interface ChatMessage {
   session_id: string
   role: string
   message: string
+  tokens_used?: number
+  latency_ms?: number
   created_at: string
 }
 
-export async function getChatHistory(): Promise<ChatMessage[]> {
-  return apiGet<ChatMessage[]>(USER_ENDPOINTS.chatHistory)
+export async function getChatHistory(companyId: string): Promise<ChatMessage[]> {
+  return apiGet<ChatMessage[]>(`${USER_ENDPOINTS.chatHistory}/${companyId}`)
 }
 
 export interface SearchQuery {
   id: number
+  session_id?: string
   query_text: string
   created_at: string
 }
 
-export async function getSearchHistory(): Promise<SearchQuery[]> {
-  return apiGet<SearchQuery[]>(USER_ENDPOINTS.searchHistory)
+export async function getSearchHistory(companyId: string): Promise<SearchQuery[]> {
+  return apiGet<SearchQuery[]>(`${USER_ENDPOINTS.searchHistory}/${companyId}`)
+}
+
+// User Settings
+export async function updateUserPassword(data: any): Promise<{message: string}> {
+  return apiPut<{message: string}>(USER_ENDPOINTS.settings.password, data)
+}
+
+export async function logoutAllDevices(): Promise<{message: string}> {
+  return apiPost<{message: string}>(USER_ENDPOINTS.settings.logoutAll, {})
+}
+
+export async function regenerateMyApiKey(): Promise<{message: string, api_key: string}> {
+  return apiPost<{message: string, api_key: string}>(USER_ENDPOINTS.settings.regenerateApiKey, {})
 }
 
 // ==========================================
@@ -311,7 +373,7 @@ export interface SearchResult {
   image_url?: string;
 }
 
-export async function testSemanticSearch(query: string, companyId: string, apiKey: string): Promise<SearchResult[]> {
+export async function testSemanticSearch(query: string, companyId: string, apiKey: string, sessionId?: string): Promise<SearchResult[]> {
   const url = `${RAG_ENDPOINTS.search}`;
   
   if (!apiKey) throw new Error("API Key faltante en la búsqueda");
@@ -322,7 +384,7 @@ export async function testSemanticSearch(query: string, companyId: string, apiKe
       "Content-Type": "application/json",
       "x-api-key": apiKey
     },
-    body: JSON.stringify({ query: query, company_id: companyId }),
+    body: JSON.stringify({ query: query, company_id: companyId, session_id: sessionId }),
   });
 
   if (!response.ok) {

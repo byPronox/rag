@@ -67,7 +67,8 @@ CREATE TABLE users (
     email VARCHAR(100) UNIQUE NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
     role VARCHAR(20) DEFAULT 'user',
-    is_active BOOLEAN DEFAULT TRUE
+    is_active BOOLEAN DEFAULT TRUE,
+    token_version INTEGER DEFAULT 1
 );
 
 -- ==========================================
@@ -136,6 +137,7 @@ CREATE TABLE search_history (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
     company_id VARCHAR(100), -- Added to track which company generated the search
+    session_id VARCHAR(100), -- Track anonymous/guest or logged-in session
     query_text TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );

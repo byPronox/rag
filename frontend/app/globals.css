@@ -138,6 +138,39 @@
   }
 }
 
+/* Custom modern scrollbar (Apple-like) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--outline-variant, #c7c4d8);
+  border-radius: 10px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #3f3f46;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--outline, #777587);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #52525b;
+}
+
+/* For Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--outline-variant, #c7c4d8) transparent;
+}
+
 /* Custom chat widget shadow */
 .chat-shadow {
   box-shadow: 0 12px 24px rgba(25, 28, 29, 0.05);

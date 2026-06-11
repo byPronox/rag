@@ -4,9 +4,11 @@ function Skeleton({ className, ...props }: React.ComponentProps<'div'>) {
   return (
     <div
       data-slot="skeleton"
-      className={cn('bg-accent animate-pulse rounded-md', className)}
+      className={cn('relative overflow-hidden bg-gray-200 dark:bg-gray-800 rounded-md', className)}
       {...props}
-    />
+    >
+      <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/80 dark:via-white/20 to-transparent" />
+    </div>
   )
 }
 

@@ -2,13 +2,11 @@
 
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { User, Shield, LayoutDashboard, LogOut } from "lucide-react"
 
 export function UserMenu() {
-  const { user, logout, isAuthenticated, isLoading } = useAuth()
-  const router = useRouter()
+  const { user, logout, isAuthenticated, isLoading, isLoggingOut } = useAuth()
   const [isOpen, setIsOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -26,7 +24,6 @@ export function UserMenu() {
   const handleLogout = () => {
     logout()
     setIsOpen(false)
-    router.push("/login")
   }
 
   // Mientras carga la sesión, mostramos un esqueleto o nada
@@ -65,7 +62,7 @@ export function UserMenu() {
               {user.email}
             </p>
             <p className="text-xs text-muted-foreground mt-1 capitalize">
-              Rol: {user.role}
+              Role: {user.role}
             </p>
           </div>
           
@@ -94,13 +91,14 @@ export function UserMenu() {
 
             <div className="h-px bg-border/50 my-1 mx-2" />
 
-            {/* Opción Logout */}
+            {/* Logout Option */}
             <button 
               onClick={handleLogout}
-              className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md text-destructive hover:bg-destructive/10 cursor-pointer transition-colors"
+              disabled={isLoggingOut}
+              className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md text-destructive hover:bg-destructive/10 cursor-pointer transition-colors disabled:opacity-50"
             >
               <LogOut className="w-4 h-4" />
-              Cerrar sesión
+              Logout
             </button>
           </div>
         </div>

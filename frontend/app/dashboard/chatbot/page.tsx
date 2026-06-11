@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Spinner } from "@/components/ui/spinner"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
@@ -124,8 +125,19 @@ export default function ChatbotConfigPage() {
 
   const SelectedIcon = ICONS[config.chat_icon as keyof typeof ICONS] || Bot
 
-  if (isLoading || isLoadingCompanies) {
-    return <div className="flex justify-center items-center min-h-[50vh]"><Spinner className="w-8 h-8 text-primary" /></div>
+  if (isLoadingCompanies || isLoading) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto">
+        <div className="space-y-2">
+           <Skeleton className="h-8 w-48" />
+           <Skeleton className="h-4 w-72" />
+        </div>
+        <div className="grid gap-6 md:grid-cols-2">
+           <Skeleton className="h-[500px] w-full" />
+           <Skeleton className="h-[500px] w-full" />
+        </div>
+      </div>
+    )
   }
 
   if (!activeCompany) {

@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Spinner } from "@/components/ui/spinner"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Select,
   SelectContent,
@@ -83,10 +84,16 @@ export default function SettingsPage() {
     }
   }
 
-  if (isLoading) {
+  if (isLoading || !config) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <Spinner className="w-8 h-8 text-primary" />
+      <div className="space-y-6 animate-in fade-in duration-500 max-w-3xl mx-auto">
+        <div className="space-y-2">
+           <Skeleton className="h-8 w-48" />
+           <Skeleton className="h-4 w-72" />
+        </div>
+        <Skeleton className="h-10 w-full mb-6" />
+        <Skeleton className="h-[300px] w-full" />
+        <Skeleton className="h-[200px] w-full mt-6" />
       </div>
     )
   }

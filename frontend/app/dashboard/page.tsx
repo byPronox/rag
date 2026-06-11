@@ -1,16 +1,24 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useEffect } from "react"
+import Link from "next/link"
+import { useCompany } from "@/lib/company-context"
+import { getDashboardMetrics, DashboardMetrics, ActivityItem } from "@/lib/api"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
+import { Spinner } from "@/components/ui/spinner"
+import { formatDistanceToNow } from "date-fns"
 import {
   MessageSquare,
   Search,
   Package,
   Activity,
-  TrendingUp,
   ArrowUpRight,
   Code,
-  Download
+  Download,
+  Settings2,
+  Cpu
 } from "lucide-react"
 
 // Metric card component
@@ -18,16 +26,12 @@ function MetricCard({
   title,
   value,
   icon: Icon,
-  trend,
-  trendValue,
-  trendLabel,
+  description
 }: {
   title: string
-  value: string
+  value: string | number
   icon: React.ElementType
-  trend?: "up" | "down" | "neutral"
-  trendValue?: string
-  trendLabel?: string
+  description?: string
 }) {
   return (
     <Card>
@@ -40,18 +44,9 @@ function MetricCard({
         </div>
         <div>
           <div className="text-3xl font-semibold text-foreground">{value}</div>
-          {trend && (
-            <div
-              className={`flex items-center gap-1 mt-2 text-xs font-medium ${
-                trend === "up"
-                  ? "text-green-600"
-                  : trend === "down"
-                  ? "text-red-600"
-                  : "text-muted-foreground"
-              }`}
-            >
-              {trend === "up" && <TrendingUp className="h-4 w-4" />}
-              {trendValue} <span className="text-muted-foreground ml-1">{trendLabel}</span>
+          {description && (
+            <div className="text-xs text-muted-foreground mt-2">
+              {description}
             </div>
           )}
         </div>
@@ -66,12 +61,18 @@ function ActivityRow({
   detail,
   status,
   time,
-}: {
-  type: string
-  detail: string
-  status: string
-  time: string
-}) {
+}: ActivityItem) {
+  
+  // Try to parse ISO string to a human-readable format if it's a date string
+  let displayTime = time;
+  try {
+    if (time && time.includes('T')) {
+      displayTime = formatDistanceToNow(new Date(time), { addSuffix: true });
+    }
+  } catch (e) {
+    // keep original string if parsing fails
+  }
+
   return (
     <tr className="hover:bg-muted/50 transition-colors">
       <td className="px-6 py-4">
@@ -83,73 +84,94 @@ function ActivityRow({
           {type}
         </span>
       </td>
-      <td className="px-6 py-4 text-sm text-foreground">{detail}</td>
+      <td className="px-6 py-4 text-sm text-foreground max-w-xs truncate">{detail}</td>
       <td className="px-6 py-4">
         <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-muted text-foreground border border-border">
           {status}
         </span>
       </td>
-      <td className="px-6 py-4 text-right text-sm text-muted-foreground">
-        {time}
+      <td className="px-6 py-4 text-right text-sm text-muted-foreground whitespace-nowrap">
+        {displayTime}
       </td>
     </tr>
   )
 }
 
 export default function UserDashboardPage() {
-  const metrics = [
-    {
-      title: "Chatbot Interactions",
-      value: "1,248",
-      icon: MessageSquare,
-      trend: "up" as const,
-      trendValue: "+14%",
-      trendLabel: "this week",
-    },
-    {
-      title: "Searches Performed",
-      value: "8,392",
-      icon: Search,
-      trend: "up" as const,
-      trendValue: "+22%",
-      trendLabel: "this week",
-    },
-    {
-      title: "Exported Products",
-      value: "156",
-      icon: Package,
-      trend: "up" as const,
-      trendValue: "+5%",
-      trendLabel: "this month",
-    },
-    {
-      title: "AI Accuracy",
-      value: "96.4%",
-      icon: Activity,
-      trend: "up" as const,
-      trendValue: "+1.2%",
-      trendLabel: "vs last week",
-    },
-  ]
+  const { activeCompany, isLoadingCompanies } = useCompany()
+  const [metrics, setMetrics] = useState<DashboardMetrics | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
 
-  const recentActivity = [
-    { type: "Chat", detail: "User asked for 'Return policies'", time: "5 min ago", status: "Resolved" },
-    { type: "Search", detail: "Term: 'Gaming laptops'", time: "15 min ago", status: "Completed" },
-    { type: "System", detail: "Chatbot script updated (Dark Theme)", time: "2 hours ago", status: "Deployed" },
-    { type: "Chat", detail: "User requested 'Technical support'", time: "3 hours ago", status: "Escalated" },
-  ]
+  useEffect(() => {
+    async function fetchMetrics() {
+      if (activeCompany) {
+        setIsLoading(true)
+        try {
+          const data = await getDashboardMetrics(activeCompany.company_id)
+          setMetrics(data)
+        } catch (error) {
+          console.error("Error fetching dashboard metrics:", error)
+        } finally {
+          setIsLoading(false)
+        }
+      } else {
+        setMetrics(null)
+      }
+    }
+
+    fetchMetrics()
+  }, [activeCompany])
+
+  if (isLoadingCompanies || !metrics) {
+    return (
+      <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-72" />
+          </div>
+          <Skeleton className="h-10 w-32" />
+        </div>
+        
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+           {Array.from({length: 4}).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)}
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-7">
+           <Skeleton className="md:col-span-4 h-[400px] w-full" />
+           <Skeleton className="md:col-span-3 h-[400px] w-full" />
+        </div>
+      </div>
+    )
+  }
+
+  if (!activeCompany) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4">
+        <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center">
+          <Activity className="w-8 h-8 text-muted-foreground" />
+        </div>
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">No Company Selected</h2>
+          <p className="text-muted-foreground mt-1 max-w-sm">
+            Please select a company from the sidebar to view its metrics.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-foreground">Dashboard Overview</h1>
           <p className="text-muted-foreground mt-1">
-            Metrics and general status of your e-commerce integration.
+            Real-time metrics for <span className="font-medium text-foreground">{activeCompany.name}</span>
           </p>
         </div>
-        <Button className="gap-2">
+        <Button onClick={() => window.print()} className="gap-2 print:hidden">
           <Download className="h-4 w-4" />
           Export Report
         </Button>
@@ -157,23 +179,46 @@ export default function UserDashboardPage() {
 
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {metrics.map((metric) => (
-          <MetricCard key={metric.title} {...metric} />
-        ))}
+         <MetricCard 
+            title="Chatbot Interactions" 
+            value={metrics?.total_chats || 0} 
+            icon={MessageSquare} 
+            description="Total messages sent by users"
+         />
+         <MetricCard 
+            title="Searches Performed" 
+            value={metrics?.total_searches || 0} 
+            icon={Search} 
+            description="Total semantic searches"
+         />
+         <MetricCard 
+            title="Exported Products" 
+            value={metrics?.total_products || 0} 
+            icon={Package} 
+            description="Active products in vector DB"
+         />
+         <MetricCard 
+            title="Tokens Consumed" 
+            value={metrics?.tokens_used?.toLocaleString() || 0} 
+            icon={Cpu} 
+            description="Total LLM tokens processed"
+         />
       </div>
 
       {/* Two column layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Recent History Table */}
         <div className="lg:col-span-2">
-          <Card className="h-full">
+          <Card className="h-full flex flex-col">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg">Recent Activity</CardTitle>
-              <Button variant="link" className="gap-1 text-primary">
-                View All <ArrowUpRight className="h-4 w-4" />
-              </Button>
+              <Link href="/dashboard/history">
+                <Button variant="link" className="gap-1 text-primary">
+                  View All <ArrowUpRight className="h-4 w-4" />
+                </Button>
+              </Link>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 flex-1">
               <div className="overflow-x-auto">
                 <table className="w-full">
                   <thead className="bg-muted/50 border-y border-border">
@@ -193,16 +238,26 @@ export default function UserDashboardPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {recentActivity.map((activity, index) => (
-                      <ActivityRow key={index} {...activity} />
-                    ))}
+                    {metrics?.recent_activity?.length ? (
+                      metrics.recent_activity.map((activity, index) => (
+                        <ActivityRow key={index} {...activity} />
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={4} className="px-6 py-8 text-center text-sm text-muted-foreground">
+                          No recent activity found.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
-              <div className="px-6 py-3 border-t border-border flex items-center justify-between text-sm text-muted-foreground">
-                <span>Showing 4 recent activities</span>
-              </div>
             </CardContent>
+            {metrics?.recent_activity?.length ? (
+              <div className="px-6 py-3 border-t border-border flex items-center justify-between text-sm text-muted-foreground">
+                <span>Showing {metrics.recent_activity.length} recent activities</span>
+              </div>
+            ) : null}
           </Card>
         </div>
 
@@ -233,14 +288,18 @@ export default function UserDashboardPage() {
               <CardTitle className="text-lg">Quick Access</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Button variant="ghost" className="w-full justify-start gap-2 border border-border/50">
-                <MessageSquare className="h-4 w-4" />
-                Edit Welcome Message
-              </Button>
-              <Button variant="ghost" className="w-full justify-start gap-2 border border-border/50">
-                <Package className="h-4 w-4" />
-                Manually Sync Products
-              </Button>
+              <Link href="/dashboard/products" passHref>
+                <Button variant="ghost" className="w-full justify-start gap-2 border border-border/50 mb-3">
+                  <Package className="h-4 w-4 text-primary" />
+                  View Exported Products
+                </Button>
+              </Link>
+              <Link href="/dashboard/chatbot" passHref>
+                <Button variant="ghost" className="w-full justify-start gap-2 border border-border/50">
+                  <Settings2 className="h-4 w-4 text-primary" />
+                  Configure Chatbot
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         </div>

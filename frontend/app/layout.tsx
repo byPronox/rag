@@ -5,13 +5,13 @@ import { AuthProvider } from '@/lib/auth-context'
 import { CompanyProvider } from '@/lib/company-context' // <--- AÑADIDO
 import './globals.css'
 
-const inter = Inter({ 
+const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter"
 });
 
 export const metadata: Metadata = {
-  title: 'RAG Intelligence | AI-Powered E-commerce Search',
+  title: 'RAG Intelligence',
   description: 'Semantic search and AI chat for your e-commerce store.',
 }
 
