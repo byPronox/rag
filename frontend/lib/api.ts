@@ -1,11 +1,20 @@
 // API Configuration for Core & RAG Microservices
 import type { User } from "./auth-context"
 
+// URL base del API Gateway (Configurada en Vercel)
+const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL;
+
 // 1. Apunta al Microservicio 2 (Core)
-const CORE_API_URL = process.env.NEXT_PUBLIC_CORE_API_URL || "http://localhost:8000"
+// Si el Gateway existe, enruta por /core. Si no, usa la conexión directa (Fallback).
+const CORE_API_URL = GATEWAY_URL
+  ? `${GATEWAY_URL}/core`
+  : (process.env.NEXT_PUBLIC_CORE_API_URL || "http://localhost:8000");
 
 // 2. Apunta al Microservicio 3 (RAG / Chatbot)
-const RAG_API_URL = process.env.NEXT_PUBLIC_RAG_API_URL || "http://localhost:8001"
+// Si el Gateway existe, enruta por /rag. Si no, usa la conexión directa (Fallback).
+const RAG_API_URL = GATEWAY_URL
+  ? `${GATEWAY_URL}/rag`
+  : (process.env.NEXT_PUBLIC_RAG_API_URL || "http://localhost:8001");
 
 // Auth endpoints -> Usan el Core API (Microservicio 2)
 export const AUTH_ENDPOINTS = {
@@ -138,7 +147,7 @@ export async function login(email: string, password: string): Promise<LoginRespo
   const formData = new FormData()
   formData.append("username", email)
   formData.append("password", password)
-  
+
   return apiPostFormData<LoginResponse>(AUTH_ENDPOINTS.login, formData)
 }
 
@@ -276,8 +285,8 @@ export async function getCompanyConfig(companyId: string): Promise<CompanyConfig
 }
 
 // ACTUALIZADO: Actualiza la configuración de una compañía específica
-export async function updateCompanyConfig(companyId: string, config: Partial<CompanyConfig>): Promise<{message: string}> {
-  return apiPut<{message: string}>(`${USER_ENDPOINTS.config}/${companyId}`, config as Record<string, unknown>)
+export async function updateCompanyConfig(companyId: string, config: Partial<CompanyConfig>): Promise<{ message: string }> {
+  return apiPut<{ message: string }>(`${USER_ENDPOINTS.config}/${companyId}`, config as Record<string, unknown>)
 }
 
 // NUEVO: Obtener los productos exportados para una compañía
@@ -347,16 +356,16 @@ export async function getSearchHistory(companyId: string): Promise<SearchQuery[]
 }
 
 // User Settings
-export async function updateUserPassword(data: any): Promise<{message: string}> {
-  return apiPut<{message: string}>(USER_ENDPOINTS.settings.password, data)
+export async function updateUserPassword(data: any): Promise<{ message: string }> {
+  return apiPut<{ message: string }>(USER_ENDPOINTS.settings.password, data)
 }
 
-export async function logoutAllDevices(): Promise<{message: string}> {
-  return apiPost<{message: string}>(USER_ENDPOINTS.settings.logoutAll, {})
+export async function logoutAllDevices(): Promise<{ message: string }> {
+  return apiPost<{ message: string }>(USER_ENDPOINTS.settings.logoutAll, {})
 }
 
-export async function regenerateMyApiKey(): Promise<{message: string, api_key: string}> {
-  return apiPost<{message: string, api_key: string}>(USER_ENDPOINTS.settings.regenerateApiKey, {})
+export async function regenerateMyApiKey(): Promise<{ message: string, api_key: string }> {
+  return apiPost<{ message: string, api_key: string }>(USER_ENDPOINTS.settings.regenerateApiKey, {})
 }
 
 // ==========================================
@@ -375,12 +384,12 @@ export interface SearchResult {
 
 export async function testSemanticSearch(query: string, companyId: string, apiKey: string, sessionId?: string): Promise<SearchResult[]> {
   const url = `${RAG_ENDPOINTS.search}`;
-  
+
   if (!apiKey) throw new Error("API Key faltante en la búsqueda");
 
   const response = await fetch(url, {
     method: "POST",
-    headers: { 
+    headers: {
       "Content-Type": "application/json",
       "x-api-key": apiKey
     },
@@ -390,13 +399,13 @@ export async function testSemanticSearch(query: string, companyId: string, apiKe
   if (!response.ok) {
     throw new Error("Error en la búsqueda semántica");
   }
-  
+
   const data = await response.json();
   return data.results;
 }
 
 export async function getUserApiKey(): Promise<{ message: string, api_key: string }> {
-  return apiGet<{ message: string, api_key: string }>(`${CORE_API_URL}/api/v1/api-keys/`); 
+  return apiGet<{ message: string, api_key: string }>(`${CORE_API_URL}/api/v1/api-keys/`);
 }
 
 // ==========================================
@@ -418,9 +427,9 @@ export async function sendRagMessage(payload: ChatMessagePayload, apiKey: string
   // Usamos tu RAG_ENDPOINTS.chat centralizado
   const response = await fetch(RAG_ENDPOINTS.chat, {
     method: "POST",
-    headers: { 
+    headers: {
       "Content-Type": "application/json",
-      "x-api-key": apiKey 
+      "x-api-key": apiKey
     },
     body: JSON.stringify(payload),
   });
@@ -428,6 +437,6 @@ export async function sendRagMessage(payload: ChatMessagePayload, apiKey: string
   if (!response.ok) {
     throw new Error("Error en la comunicación con el modelo RAG");
   }
-  
+
   return response.json();
 }
