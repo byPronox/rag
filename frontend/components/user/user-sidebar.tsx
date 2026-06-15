@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -28,10 +29,20 @@ const secondaryNavigation = [
 
 export function UserSidebar() {
   const pathname = usePathname()
-  const { logout, user, isLoggingOut } = useAuth()
+  // 1. Extraemos signOut del nuevo contexto
+  const { signOut, user } = useAuth()
 
-  const handleLogout = () => {
-    logout()
+  // 2. Manejamos el estado de carga localmente
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      await signOut()
+    } catch (error) {
+      console.error("Error al cerrar sesión", error)
+      setIsLoggingOut(false)
+    }
   }
 
   return (
@@ -89,20 +100,20 @@ export function UserSidebar() {
               </Link>
             )
           })}
-          
+
           <button
             onClick={handleLogout}
             disabled={isLoggingOut}
             className="flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-lg transition-colors text-muted-foreground hover:bg-destructive/10 hover:text-destructive w-full disabled:opacity-50"
           >
             <LogOut className="w-5 h-5" />
-            Logout
+            {isLoggingOut ? "Cerrando sesión..." : "Logout"}
           </button>
 
           {/* User info */}
           <div className="px-4 pt-4 mt-2 border-t border-border">
             <p className="text-xs text-muted-foreground">Signed in as</p>
-            <p className="text-sm font-medium text-foreground truncate">{user?.email || "stefanjativa2@gmail.com"}</p>
+            <p className="text-sm font-medium text-foreground truncate">{user?.email || "usuario@ejemplo.com"}</p>
           </div>
         </div>
       </div>
