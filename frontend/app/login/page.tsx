@@ -1,60 +1,26 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import Image from "next/image"
-import { login as apiLogin, apiGet, AUTH_ENDPOINTS } from "@/lib/api"
-import { useAuth, type User } from "@/lib/auth-context"
-import { Input } from "@/components/ui/input"
+import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { InteractiveParticles } from "@/components/ui/interactive-particles"
 
 export default function LoginPage() {
   const router = useRouter()
-  const { login, isAuthenticated, isLoading: authLoading, user } = useAuth()
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [error, setError] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+  const { signIn, isAuthenticated, loaded } = useAuth()
 
   useEffect(() => {
-    if (!authLoading && isAuthenticated && user) {
-      if (user.role === "admin") {
-        router.push("/admin")
-      } else {
-        router.push("/dashboard")
-      }
+    if (loaded && isAuthenticated) {
+      // Todos los usuarios (incluso los Admins de Cognito) van al dashboard por defecto
+      // para que actúen como usuarios normales en tu sistema RAG.
+      router.push("/dashboard")
     }
-  }, [authLoading, isAuthenticated, user, router])
+  }, [loaded, isAuthenticated, router])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setIsLoading(true)
-
-    try {
-      await apiLogin(email, password)
-      
-      // Fetch full user data including api_key from /me endpoint
-      const userData = await apiGet<User>(AUTH_ENDPOINTS.me)
-      
-      login(userData)
-      
-      if (userData.role === "admin") {
-        router.push("/admin")
-      } else {
-        router.push("/dashboard")
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to sign in")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  if (authLoading || isAuthenticated) {
+  if (!loaded || isAuthenticated) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--surface)]">
         <Spinner className="w-8 h-8 text-primary" />
@@ -64,132 +30,30 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex">
-      {/* Left Panel - Branding & Illustration */}
+      {/* Panel Izquierdo - Mantenemos tu UI intacta */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #1e1b4b 0%, #312e81 30%, #3730a3 60%, #1e1b4b 100%)' }}>
-        {/* Interactive particles background */}
         <InteractiveParticles />
-
-        {/* Content - Set pointer-events-none to let particles receive mouse events */}
         <div className="relative z-10 flex flex-col w-full p-10 pointer-events-none">
-          {/* Logo */}
-          <div className="flex items-center pointer-events-auto w-fit">
-            <Link href="/" className="text-white font-semibold text-lg tracking-tight hover:opacity-80 transition-opacity">
-              RAG Intelligence
-            </Link>
-          </div>
-
-          {/* Center Content */}
           <div className="flex-1 flex items-center justify-center">
-            {/* Illustration Container */}
-            <div className="w-full max-w-md">
-              <Image
-                src="/images/login-illustration.svg"
-                alt="Data Analysis Illustration"
-                width={450}
-                height={360}
-                className="w-full h-auto drop-shadow-2xl"
-                priority
-              />
-            </div>
+            <Image src="/images/login-illustration.svg" alt="Illustration" width={450} height={360} className="w-full h-auto drop-shadow-2xl" priority />
           </div>
         </div>
       </div>
 
-      {/* Right Panel - Login Form */}
+      {/* Panel Derecho - Solo el botón de SSO */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-white">
-        <div className="w-full max-w-md">
-          {/* Mobile Logo - Only visible on small screens */}
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-10">
-            <Link href="/" className="text-[var(--on-surface)] font-semibold text-xl hover:opacity-80 transition-opacity">
-              RAG Intelligence
-            </Link>
-          </div>
+        <div className="w-full max-w-md text-center">
+          <h1 className="text-3xl font-bold text-[var(--on-surface)] mb-2">Welcome back</h1>
+          <p className="text-[var(--on-surface-variant)] mb-10">
+            Inicia sesión usando la identidad central del sistema.
+          </p>
 
-          {/* Header */}
-          <div className="mb-10">
-            <h1 className="text-3xl font-bold text-[var(--on-surface)] mb-2">
-              Welcome back
-            </h1>
-            <p className="text-[var(--on-surface-variant)]">
-              Sign in to continue to your dashboard
-            </p>
-          </div>
-
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-            {error && (
-              <div className="bg-destructive/10 border border-destructive/30 text-destructive text-sm rounded-lg px-4 py-3">
-                {error}
-              </div>
-            )}
-
-            <div className="flex flex-col gap-2">
-              <label
-                htmlFor="email"
-                className="text-sm font-medium text-[var(--on-surface)]"
-              >
-                Email address
-              </label>
-              <Input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="name@company.com"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full h-12 bg-[var(--surface)] border border-[var(--outline-variant)] rounded-lg px-4 text-[var(--on-surface)] placeholder:text-[var(--outline)] focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-              />
-            </div>
-
-            <div className="flex flex-col gap-2">
-              <div className="flex justify-between items-center">
-                <label
-                  htmlFor="password"
-                  className="text-sm font-medium text-[var(--on-surface)]"
-                >
-                  Password
-                </label>
-                <Link
-                  href="/forgot-password"
-                  className="text-sm text-primary hover:text-primary/80 transition-colors"
-                >
-                  Forgot password?
-                </Link>
-              </div>
-              <Input
-                id="password"
-                name="password"
-                type="password"
-                placeholder="Enter your password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full h-12 bg-[var(--surface)] border border-[var(--outline-variant)] rounded-lg px-4 text-[var(--on-surface)] placeholder:text-[var(--outline)] focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
-              />
-            </div>
-
-            <Button
-              type="submit"
-              disabled={isLoading}
-              className="w-full h-12 bg-primary text-white font-medium rounded-lg hover:bg-primary/90 transition-all flex items-center justify-center shadow-lg shadow-primary/25 disabled:opacity-70"
-            >
-              {isLoading ? <Spinner className="w-5 h-5" /> : "Sign in"}
-            </Button>
-          </form>
-
-          {/* Footer */}
-          <div className="mt-8 text-center">
-            <p className="text-[var(--on-surface-variant)]">
-              {"Don't have an account?"}{" "}
-              <a
-                href="mailto:support@raginteligence.com"
-                className="text-primary hover:text-primary/80 font-medium transition-colors"
-              >
-                Contact us
-              </a>
-            </p>
-          </div>
+          <Button
+            onClick={() => signIn("/dashboard")}
+            className="w-full h-12 bg-primary text-white font-medium rounded-lg hover:bg-primary/90 transition-all flex items-center justify-center shadow-lg"
+          >
+            Iniciar Sesión (SSO)
+          </Button>
         </div>
       </div>
     </div>
