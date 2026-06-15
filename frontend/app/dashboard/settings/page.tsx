@@ -93,12 +93,10 @@ export default function UserSettingsPage() {
 
     setIsRegeneratingKey(true)
     try {
-      const res = await regenerateMyApiKey()
-      // Update local context user with new key to avoid needing a refresh
-      if (user) {
-        login({ ...user, api_key: res.api_key })
-      }
+      await regenerateMyApiKey()
       alert("API Key regenerated successfully!")
+      // En lugar de usar 'login', recargamos la página para traer la data fresca
+      window.location.reload()
     } catch (error) {
       console.error("Failed to regenerate API key", error)
       alert("Failed to regenerate API key.")
@@ -108,8 +106,12 @@ export default function UserSettingsPage() {
   }
 
   const handleCopyKey = () => {
-    if (user?.api_key) {
-      navigator.clipboard.writeText(user.api_key)
+    // Si la API key está en el token del user, la copia (dependiendo de cómo David haya configurado Cognito)
+    // @ts-ignore (Ignoramos el tipado estricto si API Key no viene en el Type por defecto de Cognito)
+    const apiKey = user?.api_key || user?.["custom:api_key"];
+
+    if (apiKey) {
+      navigator.clipboard.writeText(apiKey)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     }
@@ -230,7 +232,8 @@ export default function UserSettingsPage() {
                   <div className="relative flex-1 max-w-md">
                     <Input
                       type={showApiKey ? "text" : "password"}
-                      value={user?.api_key || "No key generated"}
+                      // @ts-ignore
+                      value={user?.api_key || user?.["custom:api_key"] || "No key generated"}
                       readOnly
                       className="pr-10 font-mono text-sm"
                     />
