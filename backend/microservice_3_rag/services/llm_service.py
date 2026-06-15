@@ -15,8 +15,11 @@ def generate_rag_response(supreme_prompt: str, tenant_prompt: str, llm_model: st
         for p in context_products:
             context_text += f"- {p['name']} (SKU: {p['sku']}) | Price: ${p['price']} | Stock: {p['stock']}\n"
     
-    full_system_content = f"{supreme_prompt}\n\n[STORE OWNER INSTRUCTIONS]:\n{tenant_prompt}\n\n{context_text}"
-    
+    full_system_content = f"""{supreme_prompt}
+    [INSTRUCTIONS FROM THE STORE OWNER]:
+    {tenant_prompt}
+    {context_text}"""
+        
     messages = [
         {"role": "system", "content": full_system_content}
     ]
