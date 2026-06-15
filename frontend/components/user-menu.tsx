@@ -6,8 +6,12 @@ import { useAuth } from "@/lib/auth-context"
 import { User, Shield, LayoutDashboard, LogOut } from "lucide-react"
 
 export function UserMenu() {
-  const { user, logout, isAuthenticated, isLoading, isLoggingOut } = useAuth()
+  // 1. Adaptamos a las variables del nuevo contexto
+  const { user, signOut, isAuthenticated, loaded, isAdmin } = useAuth()
+
   const [isOpen, setIsOpen] = useState(false)
+  // 2. Manejamos el estado de cierre de sesión localmente
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // Cierra el menú si haces clic afuera
@@ -21,19 +25,26 @@ export function UserMenu() {
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
-  const handleLogout = () => {
-    logout()
-    setIsOpen(false)
+  const handleLogout = async () => {
+    setIsLoggingOut(true)
+    try {
+      await signOut()
+      setIsOpen(false)
+    } catch (error) {
+      console.error("Error al cerrar sesión", error)
+      setIsLoggingOut(false)
+    }
   }
 
-  // Mientras carga la sesión, mostramos un esqueleto o nada
-  if (isLoading) return <div className="size-9 rounded-full bg-muted animate-pulse" />
+  // Mientras carga la sesión, mostramos un esqueleto
+  // 3. Invertimos la lógica: si no está cargado (!loaded)
+  if (!loaded) return <div className="size-9 rounded-full bg-muted animate-pulse" />
 
   // Si no está autenticado, mostramos el botón de login genérico
   if (!isAuthenticated || !user) {
     return (
-      <Link 
-        href="/login" 
+      <Link
+        href="/login"
         className="inline-flex items-center justify-center gap-2 text-sm font-medium size-9 hover:text-primary/80 transition-colors duration-200 rounded-full hover:bg-[var(--surface-container)]"
       >
         <User className="w-5 h-5" />
@@ -47,7 +58,7 @@ export function UserMenu() {
   return (
     <div className="relative" ref={menuRef}>
       {/* El Avatar que se puede clickear */}
-      <button 
+      <button
         onClick={() => setIsOpen(!isOpen)}
         className="flex size-9 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-medium hover:ring-2 hover:ring-primary/50 transition-all focus:outline-none"
       >
@@ -62,15 +73,15 @@ export function UserMenu() {
               {user.email}
             </p>
             <p className="text-xs text-muted-foreground mt-1 capitalize">
-              Role: {user.role}
+              Role: {isAdmin ? "Admin" : "User"}
             </p>
           </div>
-          
+
           <div className="p-1">
             {/* Opción Admin Panel (Solo visible si es admin) */}
-            {user.role === "admin" && (
-              <Link 
-                href="/admin" 
+            {isAdmin && (
+              <Link
+                href="/admin"
                 onClick={() => setIsOpen(false)}
                 className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors"
               >
@@ -80,8 +91,8 @@ export function UserMenu() {
             )}
 
             {/* Opción Dashboard (Visible para todos) */}
-            <Link 
-              href="/dashboard" 
+            <Link
+              href="/dashboard"
               onClick={() => setIsOpen(false)}
               className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-accent hover:text-accent-foreground cursor-pointer transition-colors"
             >
@@ -92,13 +103,13 @@ export function UserMenu() {
             <div className="h-px bg-border/50 my-1 mx-2" />
 
             {/* Logout Option */}
-            <button 
+            <button
               onClick={handleLogout}
               disabled={isLoggingOut}
               className="w-full flex items-center gap-2 px-3 py-2 text-sm rounded-md text-destructive hover:bg-destructive/10 cursor-pointer transition-colors disabled:opacity-50"
             >
               <LogOut className="w-4 h-4" />
-              Logout
+              {isLoggingOut ? "Cerrando sesión..." : "Logout"}
             </button>
           </div>
         </div>
