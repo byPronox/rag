@@ -12,7 +12,8 @@ import { ProductGrid } from "@/components/demo/product-grid"
 import { ChatWidget } from "@/components/demo/chat-widget"
 
 export default function DemoPage() {
-  const { isAuthenticated, isLoading: isAuthLoading, user } = useAuth()
+  // 1. Cambiamos isLoading por loaded
+  const { isAuthenticated, loaded, user } = useAuth()
   const { activeCompany } = useCompany()
 
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
@@ -49,8 +50,9 @@ export default function DemoPage() {
     }
 
     try {
-      const userApiKey = (user as any)?.api_key;
-      
+      // @ts-ignore
+      const userApiKey = (user as any)?.api_key || user?.["custom:api_key"];
+
       if (!userApiKey) {
         console.error("[RAG Error] No API Key found for this user");
         alert("Error de sesión: No se detectó tu API Key. Cierra sesión y vuelve a entrar.");
@@ -69,7 +71,8 @@ export default function DemoPage() {
     }
   }
 
-  if (isAuthLoading) {
+  // 2. Invertimos la lógica: si NO ha cargado (!loaded), muestra el spinner
+  if (!loaded) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Spinner className="w-8 h-8 text-primary" />
@@ -80,18 +83,18 @@ export default function DemoPage() {
   return (
     <div className="bg-background text-foreground min-h-screen flex flex-col">
       <DemoHeader />
-      
+
       <main className="flex-grow w-full max-w-[1280px] mx-auto px-6 py-8 flex flex-col gap-8">
         <SearchHero onSearch={handleSearch} />
-        
-        <ProductGrid 
-          products={searchResults} 
-          isSearching={isSearching} 
-          hasSearched={hasSearched} 
+
+        <ProductGrid
+          products={searchResults}
+          isSearching={isSearching}
+          hasSearched={hasSearched}
           showAuthCTA={showAuthCTA}
         />
       </main>
-      
+
       <ChatWidget />
     </div>
   )
