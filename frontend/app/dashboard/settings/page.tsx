@@ -13,11 +13,11 @@ import { Spinner } from "@/components/ui/spinner"
 import { Settings, Key, ShieldAlert, LogOut, RefreshCw, Eye, EyeOff, Copy, Check } from "lucide-react"
 
 export default function UserSettingsPage() {
-  const { user, login } = useAuth()
-  
+  const { user } = useAuth()
+
   // Tabs state
   const [activeTab, setActiveTab] = useState("security")
-  
+
   // Password State
   const [currentPassword, setCurrentPassword] = useState("")
   const [newPassword, setNewPassword] = useState("")
@@ -75,7 +75,7 @@ export default function UserSettingsPage() {
     try {
       await logoutAllDevices()
       // Force a page reload which will trigger auth-context to see the session is dead
-      window.location.href = "/login" 
+      window.location.href = "/login"
     } catch (error) {
       console.error("Failed to log out of all devices", error)
       alert("Failed to log out of all devices. Please try again.")
@@ -148,35 +148,35 @@ export default function UserSettingsPage() {
               <form onSubmit={handleUpdatePassword} className="space-y-4 max-w-md">
                 <div className="space-y-2">
                   <Label htmlFor="current">Current Password</Label>
-                  <Input 
-                    id="current" 
-                    type="password" 
-                    required 
+                  <Input
+                    id="current"
+                    type="password"
+                    required
                     value={currentPassword}
                     onChange={(e) => setCurrentPassword(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="new">New Password</Label>
-                  <Input 
-                    id="new" 
-                    type="password" 
-                    required 
+                  <Input
+                    id="new"
+                    type="password"
+                    required
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirm">Confirm New Password</Label>
-                  <Input 
-                    id="confirm" 
-                    type="password" 
-                    required 
+                  <Input
+                    id="confirm"
+                    type="password"
+                    required
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
                   />
                 </div>
-                
+
                 {passwordMessage.text && (
                   <div className={`text-sm font-medium p-2 rounded border ${passwordMessage.type === 'error' ? 'text-red-500 bg-red-500/10 border-red-500/20' : 'text-green-500 bg-green-500/10 border-green-500/20'}`}>
                     {passwordMessage.text}
@@ -201,9 +201,9 @@ export default function UserSettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button 
-                variant="destructive" 
-                onClick={handleLogoutAll} 
+              <Button
+                variant="destructive"
+                onClick={handleLogoutAll}
                 disabled={isLoggingOutAll}
               >
                 {isLoggingOutAll ? <Spinner className="w-4 h-4 mr-2" /> : <LogOut className="w-4 h-4 mr-2" />}
@@ -223,14 +223,14 @@ export default function UserSettingsPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              
+
               <div className="space-y-2">
                 <Label>Your API Key</Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1 max-w-md">
-                    <Input 
-                      type={showApiKey ? "text" : "password"} 
-                      value={user?.api_key || "No key generated"} 
+                    <Input
+                      type={showApiKey ? "text" : "password"}
+                      value={user?.api_key || "No key generated"}
                       readOnly
                       className="pr-10 font-mono text-sm"
                     />
@@ -257,13 +257,13 @@ export default function UserSettingsPage() {
               <div className="pt-4 border-t border-border">
                 <h3 className="font-medium mb-2">Regenerate API Key</h3>
                 <p className="text-sm text-muted-foreground mb-4">
-                  If you suspect your API key has been compromised, you can generate a new one. 
+                  If you suspect your API key has been compromised, you can generate a new one.
                   <span className="font-semibold text-destructive ml-1">
                     Warning: Old integrations will stop working immediately.
                   </span>
                 </p>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   onClick={handleRegenerateApiKey}
                   disabled={isRegeneratingKey}
                   className="gap-2"
