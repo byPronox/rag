@@ -1,5 +1,5 @@
 import json
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from controllers.message_controller import process_product_message
 
 @patch('controllers.message_controller.get_db_connection')
