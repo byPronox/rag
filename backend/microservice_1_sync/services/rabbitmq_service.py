@@ -1,9 +1,11 @@
 import pika
 import time
 from config.settings import Config
-from controllers.message_controller import process_product_message
+
 
 def start_worker():
+    from controllers.message_controller import process_product_message
+
     time.sleep(5) 
     
     parameters = pika.URLParameters(Config.RABBITMQ_URL)
