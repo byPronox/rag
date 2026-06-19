@@ -7,9 +7,12 @@ on:
     branches: [ "main" ]
 
 jobs:
-  static-analysis-and-testing:
+  # ----------------------------------------------------
+  # NODO 1: Calidad de Código (Flake8 y Pylint)
+  # ----------------------------------------------------
+  code-quality:
+    name: Code Quality & Linting
     runs-on: ubuntu-latest
-    
     strategy:
       matrix:
         microservice: 
@@ -31,27 +34,62 @@ jobs:
       run: |
         cd ${{ matrix.microservice }}
         python -m pip install --upgrade pip
-        # Instalamos herramientas de pruebas y métricas para el deber
-        pip install flake8 pytest httpx pytest-cov pylint
+        pip install flake8 pylint
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
     - name: Capstone - Critical Syntax Check
       run: |
         cd ${{ matrix.microservice }}
-        # Esto detiene el despliegue si hay errores fatales (variables sin definir, mala sintaxis)
         flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
 
     - name: Checkstyle Equivalent (Flake8 Full Report)
       run: |
         cd ${{ matrix.microservice }}
-        # Genera el reporte completo de estilo sin detener el pipeline (--exit-zero)
         flake8 . --output-file=flake8-report.txt --exit-zero
 
     - name: PMD Equivalent (Pylint Static Analysis)
       run: |
         cd ${{ matrix.microservice }}
-        # Busca todos los archivos .py, los analiza y guarda el reporte
         find . -type f -name "*.py" | xargs pylint --output-format=text > pylint-report.txt || true
+
+    - name: Upload Linting Reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: linting-reports-${{ strategy.job-index }}
+        path: |
+          ${{ matrix.microservice }}/flake8-report.txt
+          ${{ matrix.microservice }}/pylint-report.txt
+
+  # ----------------------------------------------------
+  # NODO 2: Pruebas (Pytest y Cobertura)
+  # ----------------------------------------------------
+  testing:
+    name: Unit Testing & Coverage
+    needs: code-quality
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        microservice: 
+          - backend/microservice_1_sync
+          - backend/microservice_2_core
+          - backend/microservice_3_rag
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        cd ${{ matrix.microservice }}
+        python -m pip install --upgrade pip
+        pip install pytest httpx pytest-cov
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
     - name: JaCoCo Equivalent (Pytest + Coverage)
       env:
@@ -60,14 +98,10 @@ jobs:
         SECRET_KEY: "dummy_secret_jwt_para_tests"
       run: |
         cd ${{ matrix.microservice }}
-        # Corre los tests y genera el XML de cobertura (coverage.xml)
         pytest --cov=. --cov-report=xml:coverage.xml || echo "Tests failed or missing, but continuing to generate report."
 
-    - name: Upload Analysis Reports
+    - name: Upload Coverage Report
       uses: actions/upload-artifact@v4
       with:
-        name: quality-reports-part-${{ strategy.job-index }}
-        path: |
-          ${{ matrix.microservice }}/flake8-report.txt
-          ${{ matrix.microservice }}/pylint-report.txt
-          ${{ matrix.microservice }}/coverage.xml
+        name: coverage-reports-${{ strategy.job-index }}
+        path: ${{ matrix.microservice }}/coverage.xml
