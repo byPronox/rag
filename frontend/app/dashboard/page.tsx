@@ -97,9 +97,8 @@ export default function UserDashboardPage() {
     setUiSuccess("")
 
     try {
-      // Consumimos el endpoint correspondiente del BFF para almacenar el payload opaco cifrado con KMS
       await api.post("/messages", {
-        action: "create", // O la acción de registro definida en el Sistema C
+        action: "send",
         subject,
         type: msgType,
         confidentialityLevel: confLevel,
