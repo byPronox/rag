@@ -1,27 +1,30 @@
 "use client"
 
 import { useState, useEffect } from "react"
-// Importamos las funciones necesarias de la API
+
+// 1. Importamos SOLO lo del KMS manual
+import { decryptPayload, EncryptedEnvelope } from "@/lib/api/kms"
+
+// 2. Importamos SOLO lo de la bandeja de mensajes (DynamoDB)
 import {
-  decryptPayload,
-  EncryptedEnvelope,
   listMessages,
   decryptMessage,
   SecureMessageSummary,
   SecureMessageContent,
   ConfidentialityLevel
-} from "@/lib/api/kms" // O el path correcto a tu archivo api/messages.ts si los separaste
+} from "@/lib/api/messages"
+
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Unlock, Mail, User, Calendar, FileText, RefreshCw, ShieldAlert, Lock } from "lucide-react"
+import { Unlock, Mail, User, Calendar, FileText, RefreshCw, ShieldAlert } from "lucide-react"
 
 export default function AdminDashboardPage() {
   // ==========================================
   // ESTADOS PARA HERRAMIENTA MANUAL (JSON)
   // ==========================================
   const [jsonInput, setJsonInput] = useState("")
-  const [manualDecryptedResult, setManualDecryptedResult] = useState<any>(null) // Cambiado a any para mostrar todo el JSON si es necesario
+  const [manualDecryptedResult, setManualDecryptedResult] = useState<any>(null)
   const [isManualDecrypting, setIsManualDecrypting] = useState(false)
   const [manualKmsError, setManualKmsError] = useState("")
 
@@ -57,15 +60,13 @@ export default function AdminDashboardPage() {
         throw new Error("El formato del JSON es incorrecto. Faltan los campos 'encryptedPayload' o 'encryptedDataKey'.");
       }
 
-      // 3. Enviamos la trama al Sistema C
+      // Enviamos la trama al backend para interactuar con KMS
       const result = await decryptPayload(envelope);
 
-      // Si el payload es un string JSON (como tu compañero lo envía ahora), intentamos parsearlo para mostrarlo bonito
       try {
         const parsedPayload = JSON.parse(result.payload);
         setManualDecryptedResult(JSON.stringify(parsedPayload, null, 2));
       } catch {
-        // Si no es JSON, lo mostramos tal cual
         setManualDecryptedResult(result.payload);
       }
 
@@ -83,7 +84,6 @@ export default function AdminDashboardPage() {
     setIsLoadingList(true)
     setInboxError("")
     try {
-      // Nota: Asegúrate de que listMessages() esté importado correctamente
       const data = await listMessages()
       setMessages(data)
     } catch (err) {
@@ -125,12 +125,11 @@ export default function AdminDashboardPage() {
     }
   }
 
-
   return (
     <div className="max-w-7xl mx-auto py-8 px-4 animate-in fade-in duration-500 space-y-12">
 
       {/* ==========================================
-          SECCIÓN 1: HERRAMIENTA DIDÁCTICA MANUAL
+          SECCIÓN 1: HERRAMIENTA DIDÁCTICA MANUAL (LO QUE PIDIÓ EL PROFESOR)
           ========================================== */}
       <section className="space-y-6">
         <div>
@@ -164,7 +163,7 @@ export default function AdminDashboardPage() {
               disabled={isManualDecrypting || !jsonInput.trim()}
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2"
             >
-              {isManualDecrypting ? "Procesando descifrado..." : "Descifrar Trama"}
+              {isManualDecrypting ? "Procesando descifrado..." : "Descifrar Trama Manualmente"}
             </Button>
 
             {manualKmsError && (
@@ -173,7 +172,6 @@ export default function AdminDashboardPage() {
               </div>
             )}
 
-            {/* Resultado Descifrado Manual */}
             {manualDecryptedResult && (
               <div className="mt-6 pt-4 border-t border-slate-100 animate-in slide-in-from-bottom-2 duration-300">
                 <p className="text-sm font-medium text-slate-700 mb-2">
@@ -193,7 +191,7 @@ export default function AdminDashboardPage() {
       <hr className="border-slate-200" />
 
       {/* ==========================================
-          SECCIÓN 2: BANDEJA DE ENTRADA (SISTEMA C)
+          SECCIÓN 2: BANDEJA DE ENTRADA (ARQUITECTURA DE TU COMPAÑERO)
           ========================================== */}
       <section className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -215,7 +213,6 @@ export default function AdminDashboardPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] gap-6 items-start">
 
-          {/* PANEL IZQUIERDO: LISTA */}
           <Card className="h-[600px] flex flex-col border-slate-200 shadow-sm bg-white">
             <CardHeader className="py-4 border-b bg-slate-50/50">
               <CardTitle className="text-xs font-semibold uppercase tracking-wider text-slate-500 flex items-center gap-2">
@@ -261,7 +258,6 @@ export default function AdminDashboardPage() {
             </CardContent>
           </Card>
 
-          {/* PANEL DERECHO: CONTENIDO */}
           <Card className="h-[600px] flex flex-col border-slate-200 shadow-sm bg-white">
             {selectedId ? (
               <div className="p-6 flex flex-col h-full justify-between">
