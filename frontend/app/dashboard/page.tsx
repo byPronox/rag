@@ -6,14 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Lock } from "lucide-react"
 
-export default function KmsEncryptorPage() {
-  // Estados para el KMS
+export default function UserDashboardPage() {
   const [encryptInput, setEncryptInput] = useState("")
   const [encryptedResult, setEncryptedResult] = useState("")
   const [isEncrypting, setIsEncrypting] = useState(false)
   const [kmsError, setKmsError] = useState("")
 
-  // Función para manejar la encriptación
   const handleEncrypt = async () => {
     if (!encryptInput.trim()) return;
 
@@ -23,7 +21,6 @@ export default function KmsEncryptorPage() {
 
     try {
       const result = await encryptPayload(encryptInput);
-      // Formateamos el JSON para que el usuario lo pueda copiar
       setEncryptedResult(JSON.stringify(result, null, 2));
     } catch (error: any) {
       setKmsError("Error al encriptar. Verifica la conexión con el Sistema C.");
@@ -34,15 +31,15 @@ export default function KmsEncryptorPage() {
 
   return (
     <div className="max-w-2xl mx-auto py-12 animate-in fade-in duration-500 space-y-8 px-4">
-      {/* Header de la página */}
+      {/* Encabezado */}
       <div>
-        <h1 className="text-2xl font-semibold text-foreground">Herramienta de Seguridad</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Dashboard de Usuario</h1>
         <p className="text-muted-foreground mt-1">
-          Utiliza esta herramienta para generar tramas seguras.
+          Herramienta de cifrado seguro utilizando el servicio KMS.
         </p>
       </div>
 
-      {/* Tarjeta exclusiva del KMS */}
+      {/* Tarjeta Cifrado KMS */}
       <Card className="border-indigo-200 shadow-sm">
         <CardHeader className="bg-indigo-50/50 border-b border-indigo-100">
           <CardTitle className="text-lg flex items-center gap-2 text-indigo-900">
@@ -76,7 +73,7 @@ export default function KmsEncryptorPage() {
             </div>
           )}
 
-          {/* Resultado para copiar */}
+          {/* Bloque de salida */}
           {encryptedResult && (
             <div className="mt-6 pt-4 border-t border-slate-100">
               <p className="text-sm font-medium text-slate-700 mb-2">
