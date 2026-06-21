@@ -1,4 +1,5 @@
 import json
+import requests
 from unittest.mock import patch, MagicMock
 from controllers.message_controller import process_product_message, send_feedback_to_odoo
 
