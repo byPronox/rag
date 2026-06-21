@@ -1,16 +1,25 @@
 from unittest.mock import patch, MagicMock
 from database.connection import get_db
 from api.deps import get_current_admin
+from models.schema import GlobalSetting
 
 def test_get_global_settings(test_client, mock_db_session, mock_admin_user):
     test_client.app.dependency_overrides[get_db] = lambda: mock_db_session
     test_client.app.dependency_overrides[get_current_admin] = lambda: mock_admin_user
     
-    settings_mock = MagicMock()
-    settings_mock.default_llm_model = "llama-3"
+    settings_mock = GlobalSetting(
+        id=1, 
+        default_llm_model="llama-3",
+        default_embedding_model="all-MiniLM-L6-v2",
+        default_welcome_message="Welcome",
+        default_system_prompt="System",
+        supreme_system_prompt="Supreme",
+        maintenance_mode=False
+    )
     mock_db_session.query.return_value.filter.return_value.first.return_value = settings_mock
     
     response = test_client.get("/admin/settings")
+    
     assert response.status_code == 200
     assert response.json()["default_llm_model"] == "llama-3"
 
