@@ -98,7 +98,7 @@ jobs:
         SECRET_KEY: "dummy_secret_jwt_para_tests"
       run: |
         cd ${{ matrix.microservice }}
-        pytest --cov=. --cov-report=xml:coverage.xml || echo "Tests failed or missing, but continuing to generate report."
+        pytest --cov=. --cov-report=xml:coverage.xml 
 
     - name: Upload Coverage Report
       uses: actions/upload-artifact@v4
