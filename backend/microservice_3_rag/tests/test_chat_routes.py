@@ -64,3 +64,28 @@ def test_chat_interaction_company_not_found(test_client, mock_db_session):
     response = test_client.post("/chat/", json=payload, headers={"x-api-key": "dummy"})
     
     assert response.status_code == 404
+
+@patch('api.routes.chat.embedding_service.generate_vector')
+@patch('api.routes.chat.search_similar_products')
+@patch('api.routes.chat.generate_rag_response')
+def test_chat_interaction_no_global_prompt(mock_generate_rag, mock_search, mock_embed, test_client, mock_db_session):
+    test_client.app.dependency_overrides[get_db] = lambda: mock_db_session
+    test_client.app.dependency_overrides[validate_tenant_api_key] = override_auth
+    
+    mock_db_session.execute.return_value.fetchone.side_effect = [
+        ("Vendes zapatos", "llama3-8b-8192"), 
+        None
+    ]
+    mock_db_session.execute.return_value.fetchall.return_value = []
+    
+    mock_embed.return_value = [0.1]
+    mock_search.return_value = []
+    mock_generate_rag.return_value = ("Hola", 10)
+    
+    payload = {"session_id": "sess-2", "message": "test", "company_id": "123"}
+    response = test_client.post("/chat/", json=payload, headers={"x-api-key": "dummy"})
+    
+    assert response.status_code == 200
+    mock_generate_rag.assert_called_once()
+    args, kwargs = mock_generate_rag.call_args
+    assert kwargs.get('supreme_prompt') == "You are an AI assistant."
