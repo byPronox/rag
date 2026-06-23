@@ -202,6 +202,12 @@ def test_update_model_status_success(test_client, mock_db_session, mock_admin_us
     
     model_mock = MagicMock()
     model_mock.id = "llama3-8b-8192"
+    model_mock.name = "LLAMA3-8B"
+    model_mock.provider = "Groq"
+    model_mock.type = "llm"
+    model_mock.description = "Official model"
+    model_mock.context_window = 8192
+    model_mock.dimensions = None
     model_mock.is_active = False
     
     mock_db_session.query.return_value.filter.return_value.first.return_value = model_mock
