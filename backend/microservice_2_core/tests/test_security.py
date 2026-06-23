@@ -40,10 +40,8 @@ def test_get_token_missing():
     assert exc.value.status_code == 401
 
 def test_get_current_user_success(mock_db_session, mock_tenant_user):
-    # Creamos un token real
     token = jwt.encode({"sub": mock_tenant_user.email, "tv": mock_tenant_user.token_version}, "dummy_secret", algorithm="HS256")
     
-    # Engañamos a settings para que use nuestro dummy_secret durante el test
     settings.SECRET_KEY = "dummy_secret"
     settings.ALGORITHM = "HS256"
     
@@ -57,7 +55,6 @@ def test_get_current_user_invalid_token(mock_db_session):
         get_current_user(token="invalid.token.here", db=mock_db_session)
 
 def test_get_current_user_expired_session(mock_db_session, mock_tenant_user):
-    # Simulamos que el usuario hizo logout (token_version subió a 2), pero envía un token viejo (tv=1)
     token = jwt.encode({"sub": mock_tenant_user.email, "tv": 1}, "dummy_secret", algorithm="HS256")
     mock_tenant_user.token_version = 2
     mock_db_session.query.return_value.filter.return_value.first.return_value = mock_tenant_user
@@ -74,3 +71,16 @@ def test_get_current_admin_forbidden(mock_tenant_user):
     with pytest.raises(HTTPException) as exc:
         get_current_admin(mock_tenant_user)
     assert exc.value.status_code == 403
+
+def test_get_current_user_not_found_in_db(mock_db_session):
+    token = jwt.encode({"sub": "fantasma@empresa.com", "tv": 1}, "dummy_secret", algorithm="HS256")
+    settings.SECRET_KEY = "dummy_secret"
+    settings.ALGORITHM = "HS256"
+    
+    mock_db_session.query.return_value.filter.return_value.first.return_value = None
+    
+    with pytest.raises(HTTPException) as exc:
+        get_current_user(token=token, db=mock_db_session)
+    
+    assert exc.value.status_code == 401
+    assert exc.value.detail == "Could not validate credentials"
