@@ -1,6 +1,6 @@
 import json
 import requests
-import re # IMPORTANTE AÑADIR ESTO PARA LIMPIAR EL NOMBRE
+import re
 from database.connection import get_db_connection
 from services.embedding_service import embedding_service
 
@@ -17,16 +17,18 @@ def send_feedback_to_odoo(webhook_url, variant_id, error_message):
 def process_product_message(ch, method, properties, body):
     conn = get_db_connection()
     
+    variant_id = None
+    webhook_url = None
+    
     try:
         data = json.loads(body)
+        
         api_key = data.get('api_key')
         action = data.get('action')
         variant_id = data.get('variant_id')
         webhook_url = data.get('webhook_url')
         
         with conn.cursor() as cur:
-            # --- CAPA DE AUTENTICACIÓN ---
-            # La tabla user_configs ahora solo valida la API Key maestra del Inquilino
             cur.execute("SELECT user_id FROM user_configs WHERE system_api_key = %s AND is_active = TRUE", (api_key,))
             user = cur.fetchone()
             
