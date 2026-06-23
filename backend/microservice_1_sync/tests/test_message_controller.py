@@ -134,10 +134,11 @@ def test_process_product_message_db_exception(mock_send_feedback, mock_get_db, m
     
     process_product_message(channel, method, None, payload)
     
-    # Assert
-    mock_conn.rollback.assert_called_once() # CRÍTICO: Debe hacer rollback
+    mock_conn.rollback.assert_called_once()
     channel.basic_nack.assert_called_once_with(delivery_tag=method.delivery_tag, requeue=True) # CRÍTICO: Debe reencolar el mensaje
-    mock_send_feedback.assert_called_once() # Debe avisar a Odoo del error
+    mock_send_feedback.assert_called_once()
+
+    mock_conn.close.assert_called_once()
 
 
 @patch('controllers.message_controller.get_db_connection')
@@ -159,6 +160,8 @@ def test_process_product_message_unknown_action(mock_get_db, mock_rabbitmq_chann
     # Assert
     mock_conn.commit.assert_called_once() # Hace commit vacío
     channel.basic_ack.assert_called_once() # Limpia el mensaje de la cola
+
+    mock_conn.close.assert_called_once()
 
 
 @patch('controllers.message_controller.requests.post')
@@ -182,3 +185,28 @@ def test_send_feedback_no_url():
     # Debería retornar inmediatamente sin romper nada
     send_feedback_to_odoo(None, 123, "Error simulado")
     # Si no lanza error, el test pasa.
+
+@patch('controllers.message_controller.get_db_connection')
+@patch('controllers.message_controller.send_feedback_to_odoo')
+def test_process_product_message_invalid_json(mock_send_feedback, mock_get_db, mock_rabbitmq_channel):
+    """Test para verificar el manejo de un JSON malformado (falla en json.loads)."""
+    channel, method = mock_rabbitmq_channel
+    mock_conn = MagicMock()
+    mock_get_db.return_value = mock_conn
+
+    # Mandamos un string que provocará un json.decoder.JSONDecodeError
+    payload = "esto_no_es_un_json_valido"
+
+    # Act
+    process_product_message(channel, method, None, payload)
+
+    # Assert
+    mock_conn.rollback.assert_called_once()  # Debe hacer rollback
+    channel.basic_nack.assert_called_once_with(delivery_tag=method.delivery_tag, requeue=True)
+    
+    # send_feedback_to_odoo será llamado con None en url y variant_id, pero con el error
+    assert mock_send_feedback.call_count == 1
+    call_args = mock_send_feedback.call_args[0]
+    assert call_args[0] is None  # webhook_url no se pudo extraer
+    assert call_args[1] is None  # variant_id no se pudo extraer
+    assert "Database or processing failure" in call_args[2]
