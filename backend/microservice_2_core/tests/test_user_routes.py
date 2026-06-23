@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 from database.connection import get_db
 from api.deps import get_current_user
+from models.schema import AIModel
 
 def test_get_user_companies(test_client, mock_db_session, mock_tenant_user):
     test_client.app.dependency_overrides[get_db] = lambda: mock_db_session
@@ -97,19 +98,21 @@ def test_get_user_active_models(test_client, mock_db_session, mock_tenant_user):
     test_client.app.dependency_overrides[get_db] = lambda: mock_db_session
     test_client.app.dependency_overrides[get_current_user] = lambda: mock_tenant_user
     
-    model_mock = MagicMock()
-    model_mock.id = "llama-3"
-    model_mock.name = "LLaMA 3"
-    model_mock.provider = "Groq"
-    model_mock.type = "llm"
-    model_mock.is_active = True
-    model_mock.description = "Test"
-    model_mock.context_window = 8192
-    model_mock.dimensions = None
+    model_instance = AIModel(
+        id="llama-3",
+        name="LLaMA 3",
+        provider="Groq",
+        type="llm",
+        is_active=True,
+        description="Test",
+        context_window=8192,
+        dimensions=None
+    )
     
-    mock_db_session.query.return_value.filter.return_value.all.return_value = [model_mock]
+    mock_db_session.query.return_value.filter.return_value.all.return_value = [model_instance]
     
     response = test_client.get("/user/models")
+    
     assert response.status_code == 200
     assert len(response.json()) == 1
     assert response.json()[0]["id"] == "llama-3"
