@@ -48,7 +48,7 @@ def test_get_current_user_success(mock_db_session, mock_tenant_user):
     mock_db_session.query.return_value.filter.return_value.first.return_value = mock_tenant_user
     
     user = get_current_user(token=token, db=mock_db_session)
-    assert user.email == "tenant@empresa.com"
+    assert user.email == "tenant@company.com"
 
 def test_get_current_user_invalid_token(mock_db_session):
     with pytest.raises(HTTPException):
@@ -73,7 +73,7 @@ def test_get_current_admin_forbidden(mock_tenant_user):
     assert exc.value.status_code == 403
 
 def test_get_current_user_not_found_in_db(mock_db_session):
-    token = jwt.encode({"sub": "fantasma@empresa.com", "tv": 1}, "dummy_secret", algorithm="HS256")
+    token = jwt.encode({"sub": "ghost@company.com", "tv": 1}, "dummy_secret", algorithm="HS256")
     settings.SECRET_KEY = "dummy_secret"
     settings.ALGORITHM = "HS256"
     

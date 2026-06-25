@@ -4,7 +4,7 @@ from database.connection import get_db, init_db
 @patch('database.connection.engine.connect')
 @patch('database.connection.Base.metadata.create_all')
 def test_init_db(mock_create_all, mock_connect):
-    """Test the database initialization and extension creation."""
+    """Test the database initialization and table creation."""
     mock_conn = MagicMock()
     mock_connect.return_value.__enter__.return_value = mock_conn
     
