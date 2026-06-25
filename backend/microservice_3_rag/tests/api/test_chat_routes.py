@@ -1,4 +1,4 @@
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from database.connection import get_db
 from api.deps import validate_tenant_api_key
 
@@ -26,6 +26,7 @@ def test_get_chat_config_not_found(test_client, mock_db_session):
     
     mock_db_session.execute.return_value.fetchone.return_value = None
     response = test_client.get("/chat/config?company_id=123", headers={"x-api-key": "dummy"})
+    
     assert response.status_code == 404
 
 @patch('api.routes.chat.embedding_service.generate_vector')
@@ -35,12 +36,10 @@ def test_chat_interaction_success(mock_generate_rag, mock_search, mock_embed, te
     test_client.app.dependency_overrides[get_db] = lambda: mock_db_session
     test_client.app.dependency_overrides[validate_tenant_api_key] = override_auth
     
-    # 1. Company info, 2. Global Prompt
     mock_db_session.execute.return_value.fetchone.side_effect = [
         ("Vendes zapatos", "llama3-8b-8192"), 
         ("Eres experto.",)
     ]
-    # 3. Chat history
     mock_db_session.execute.return_value.fetchall.return_value = [("user", "busco botas")]
     
     mock_embed.return_value = [0.1, 0.2]

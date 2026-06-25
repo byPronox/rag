@@ -3,7 +3,6 @@ import importlib
 from unittest.mock import patch
 
 def test_settings_postgres_replacement():
-    """Valida que reemplace postgres:// por postgresql:// y parsee las URLs del frontend."""
     mock_env = {
         "DATABASE_URL": "postgres://user:pass@localhost:5432/db",
         "FRONTEND_URLS": "http://localhost:3000, https://mi-saas.com, ",
@@ -18,7 +17,6 @@ def test_settings_postgres_replacement():
         assert config.settings.settings.GROQ_API_KEY == "test_key"
 
 def test_settings_postgresql_no_replacement():
-    """Valida que NO modifique la URL si ya empieza con postgresql:// y maneje URLs vacías."""
     mock_env = {
         "DATABASE_URL": "postgresql://user:pass@localhost/db",
         "FRONTEND_URLS": ""

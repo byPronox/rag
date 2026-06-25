@@ -10,5 +10,6 @@ def test_generate_vector(mock_transformer_class):
     service = EmbeddingService()
     
     result = service.generate_vector("testing text")
+    
     assert result == [0.9, 0.1]
     mock_model.encode.assert_called_once_with("testing text")

@@ -20,7 +20,6 @@ def test_semantic_search_success(test_client, mock_db_session):
         mock_db_session.commit.assert_called_once()
 
 def test_semantic_search_no_session_id(test_client, mock_db_session):
-    """Valida que la búsqueda funcione correctamente aunque el session_id sea nulo (None)."""
     test_client.app.dependency_overrides[get_db] = lambda: mock_db_session
     test_client.app.dependency_overrides[validate_tenant_api_key] = lambda: {"user_id": 99, "groq_api_key": "k"}
     
