@@ -1,4 +1,5 @@
 import time
+import re
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -15,6 +16,19 @@ class ChatRequest(BaseModel):
     session_id: str
     message: str
     company_id: str
+
+def is_safe_user_input(text: str) -> bool:
+    blacklist_patterns = [
+        r"ignore\s+(all\s+)?previous\s+instructions",
+        r"system\s+prompt",
+        r"forget\s+all",
+        r"bypass",
+        r"supreme_prompt"
+    ]
+    for pattern in blacklist_patterns:
+        if re.search(pattern, text, re.IGNORECASE):
+            return False
+    return True
 
 @router.get("/config")
 def get_chat_config(company_id: str, auth: dict = Depends(validate_tenant_api_key), db: Session = Depends(get_db)):
@@ -36,6 +50,12 @@ def get_chat_config(company_id: str, auth: dict = Depends(validate_tenant_api_ke
 
 @router.post("/")
 def chat_interaction(request: ChatRequest, db: Session = Depends(get_db), auth: dict = Depends(validate_tenant_api_key)):
+    if not is_safe_user_input(request.message):
+        raise HTTPException(
+            status_code=400, 
+            detail="Message blocked by security policies (Possible prompt injection)."
+        )
+
     start_time = time.time()
     
     sql_company = text("""
