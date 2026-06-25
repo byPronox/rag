@@ -33,7 +33,7 @@ def test_login_inactive_user(test_client, mock_db_session, mock_tenant_user):
         response = test_client.post("/auth/login", data={"username": "test@company.com", "password": "123"})
         
         assert response.status_code == 403
-        assert "disabled" in response.json()["detail"].lower()
+        assert "desactivada" in response.json()["detail"].lower()
 
 def test_get_current_user_info(test_client, mock_db_session, mock_tenant_user):
     test_client.app.dependency_overrides[get_db] = lambda: mock_db_session

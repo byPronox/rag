@@ -23,4 +23,4 @@ def test_register_existing_email(test_client, mock_db_session):
     response = test_client.post("/auth/register", json=payload)
     
     assert response.status_code == 400
-    assert "already registered" in response.json()["detail"].lower()
+    assert "ya está registrado" in response.json()["detail"].lower()

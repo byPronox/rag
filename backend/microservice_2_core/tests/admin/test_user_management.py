@@ -80,7 +80,7 @@ def test_delete_user_not_found(test_client, mock_db_session, mock_admin_user):
     response = test_client.delete("/admin/users/999")
     
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
+    assert "no encontrado" in response.json()["detail"].lower()
 
 def test_regenerate_user_api_key_by_admin(test_client, mock_db_session, mock_admin_user):
     test_client.app.dependency_overrides[get_db] = lambda: mock_db_session
@@ -106,4 +106,4 @@ def test_regenerate_user_api_key_not_found(test_client, mock_db_session, mock_ad
     response = test_client.post("/admin/users/999/api-key")
     
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
+    assert "no encontrada" in response.json()["detail"].lower()

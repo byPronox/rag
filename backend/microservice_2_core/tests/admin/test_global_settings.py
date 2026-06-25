@@ -43,7 +43,7 @@ def test_update_global_settings(test_client, mock_db_session, mock_admin_user):
     response = test_client.put("/admin/settings", json=payload)
     
     assert response.status_code == 200
-    assert "updated" in response.json()["message"].lower()
+    assert "actualizada" in response.json()["message"].lower()
     assert mock_settings.default_llm_model == "llama-3-new"
     assert mock_settings.groq_api_key == "gsk_new_key_123"
     mock_db_session.commit.assert_called_once()

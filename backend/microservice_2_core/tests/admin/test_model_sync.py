@@ -74,7 +74,7 @@ def test_sync_models_with_groq_success(mock_get, test_client, mock_db_session, m
     
     response = test_client.post("/admin/models/sync")
     assert response.status_code == 200
-    assert "saved" in response.json()["message"].lower()
+    assert "guardaron" in response.json()["message"].lower()
 
 def test_sync_models_missing_api_key(test_client, mock_db_session, mock_admin_user):
     test_client.app.dependency_overrides[get_db] = lambda: mock_db_session
@@ -87,7 +87,7 @@ def test_sync_models_missing_api_key(test_client, mock_db_session, mock_admin_us
     response = test_client.post("/admin/models/sync")
     
     assert response.status_code == 400
-    assert "not configured" in response.json()["detail"].lower()
+    assert "no configurada" in response.json()["detail"].lower()
 
 @patch('api.routes.admin_routes.requests.get')
 def test_sync_models_api_failure(mock_get, test_client, mock_db_session, mock_admin_user):
@@ -104,4 +104,4 @@ def test_sync_models_api_failure(mock_get, test_client, mock_db_session, mock_ad
     response = test_client.post("/admin/models/sync")
     
     assert response.status_code == 502
-    assert "error connecting" in response.json()["detail"].lower()
+    assert "error conectando" in response.json()["detail"].lower()

@@ -193,4 +193,4 @@ def test_regenerate_user_api_key_not_found(test_client, mock_db_session, mock_te
     response = test_client.post("/user/settings/api-key/regenerate")
     
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
+    assert "no encontrada" in response.json()["detail"].lower()
