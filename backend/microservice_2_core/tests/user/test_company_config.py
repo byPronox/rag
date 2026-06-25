@@ -74,7 +74,7 @@ def test_update_user_config_not_found(test_client, mock_db_session, mock_tenant_
     response = test_client.put("/user/config/fake_comp", json=payload)
     
     assert response.status_code == 404
-    assert "not found" in response.json()["detail"].lower()
+    assert "no encontrada" in response.json()["detail"].lower()
 
 def test_get_user_active_models(test_client, mock_db_session, mock_tenant_user):
     test_client.app.dependency_overrides[get_db] = lambda: mock_db_session
