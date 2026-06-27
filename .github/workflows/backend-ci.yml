@@ -8,10 +8,10 @@ on:
 
 jobs:
   # ----------------------------------------------------
-  # NODO 1: Calidad de Código (Flake8 y Pylint)
+  # NODO 1: Calidad de Código y Seguridad (Flake8, Pylint, Bandit)
   # ----------------------------------------------------
   code-quality:
-    name: Code Quality & Linting
+    name: Code Quality & Security
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -19,7 +19,6 @@ jobs:
           - backend/microservice_1_sync
           - backend/microservice_2_core
           - backend/microservice_3_rag
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -34,7 +33,7 @@ jobs:
       run: |
         cd ${{ matrix.microservice }}
         python -m pip install --upgrade pip
-        pip install flake8 pylint
+        pip install flake8 pylint bandit
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
     - name: Capstone - Critical Syntax Check
@@ -52,13 +51,20 @@ jobs:
         cd ${{ matrix.microservice }}
         find . -type f -name "*.py" | xargs pylint --output-format=text > pylint-report.txt || true
 
-    - name: Upload Linting Reports
+    - name: Security Static Analysis (Bandit)
+      run: |
+        cd ${{ matrix.microservice }}
+        # Escanea vulnerabilidades de seguridad y genera reporte
+        bandit -r . -f txt -o bandit-report.txt || true
+
+    - name: Upload QA & Security Reports
       uses: actions/upload-artifact@v4
       with:
-        name: linting-reports-${{ strategy.job-index }}
+        name: qa-reports-${{ strategy.job-index }}
         path: |
           ${{ matrix.microservice }}/flake8-report.txt
           ${{ matrix.microservice }}/pylint-report.txt
+          ${{ matrix.microservice }}/bandit-report.txt
 
   # ----------------------------------------------------
   # NODO 2: Pruebas (Pytest y Cobertura)
@@ -73,7 +79,6 @@ jobs:
           - backend/microservice_1_sync
           - backend/microservice_2_core
           - backend/microservice_3_rag
-
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
@@ -98,7 +103,8 @@ jobs:
         SECRET_KEY: "dummy_secret_jwt_para_tests"
       run: |
         cd ${{ matrix.microservice }}
-        pytest --cov=. --cov-report=xml:coverage.xml 
+        # Forzamos que falle el Action si la cobertura baja del 80%
+        pytest --cov=. --cov-report=xml:coverage.xml --cov-fail-under=80
 
     - name: Upload Coverage Report
       uses: actions/upload-artifact@v4
