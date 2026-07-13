@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Save, Code, Bot, MessageSquare, Sparkles, Store, User, Send, Check } from "lucide-react"
 
 // Importaciones actualizadas
-import { getCompanyConfig, updateCompanyConfig, getModels, AIModel, CompanyConfig } from "@/lib/api"
+import { getCompanyConfig, updateCompanyConfig, getModels, AIModel, CompanyConfig, RAG_API_URL } from "@/lib/api"
 // Importamos el hook del contexto de compañía
 import { useCompany } from "@/lib/company-context"
 
@@ -38,7 +38,7 @@ export default function ChatbotConfigPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [copied, setCopied] = useState(false)
   const [availableModels, setAvailableModels] = useState<AIModel[]>([])
-  
+
   // Extraemos el estado global de la compañía activa
   const { activeCompany, isLoadingCompanies } = useCompany()
 
@@ -92,7 +92,7 @@ export default function ChatbotConfigPage() {
     setIsSaving(true)
     try {
       const { system_api_key, ...configToSave } = config;
-      
+
       await updateCompanyConfig(activeCompany.company_id, configToSave as Partial<CompanyConfig>)
       alert("Chatbot configuration saved successfully!")
     } catch (error) {
@@ -109,19 +109,17 @@ export default function ChatbotConfigPage() {
   }
 
   const embedCode = `
-<!-- Start RAG SaaS Chatbot -->
 <script>
   window.RAG_CONFIG = {
     apiKey: "${config.system_api_key}",
     companyId: "${activeCompany?.company_id || 'ERROR_NO_COMPANY'}",
     color: "${config.theme_color}",
     icon: "${config.chat_icon}",
-    apiUrl: "${process.env.NEXT_PUBLIC_RAG_API_URL}"
+    apiUrl: "${RAG_API_URL}" 
   };
 </script>
 <script src="https://rag-frontend-tan.vercel.app/widget.js" async></script>
-<!-- End RAG SaaS Chatbot -->
-  `.trim()
+`.trim()
 
   const SelectedIcon = ICONS[config.chat_icon as keyof typeof ICONS] || Bot
 
@@ -129,12 +127,12 @@ export default function ChatbotConfigPage() {
     return (
       <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto">
         <div className="space-y-2">
-           <Skeleton className="h-8 w-48" />
-           <Skeleton className="h-4 w-72" />
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-72" />
         </div>
         <div className="grid gap-6 md:grid-cols-2">
-           <Skeleton className="h-[500px] w-full" />
-           <Skeleton className="h-[500px] w-full" />
+          <Skeleton className="h-[500px] w-full" />
+          <Skeleton className="h-[500px] w-full" />
         </div>
       </div>
     )
@@ -177,9 +175,9 @@ export default function ChatbotConfigPage() {
                 <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto font-mono text-muted-foreground">
                   {embedCode}
                 </pre>
-                <Button 
-                  size="icon" 
-                  variant="secondary" 
+                <Button
+                  size="icon"
+                  variant="secondary"
                   className="absolute top-2 right-2 h-8 w-8"
                   onClick={() => copyToClipboard(embedCode)}
                 >
@@ -207,9 +205,9 @@ export default function ChatbotConfigPage() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Language Model (LLM)</Label>
-                <Select 
-                  value={config.selected_llm_model} 
-                  onValueChange={(val) => setConfig({...config, selected_llm_model: val})}
+                <Select
+                  value={config.selected_llm_model}
+                  onValueChange={(val) => setConfig({ ...config, selected_llm_model: val })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select AI Model" />
@@ -224,9 +222,9 @@ export default function ChatbotConfigPage() {
 
               <div className="space-y-2">
                 <Label>Welcome Message</Label>
-                <Input 
+                <Input
                   value={config.welcome_message}
-                  onChange={(e) => setConfig({...config, welcome_message: e.target.value})}
+                  onChange={(e) => setConfig({ ...config, welcome_message: e.target.value })}
                   placeholder="Welcome to our store!"
                 />
                 <p className="text-xs text-muted-foreground">The first message the user sees when opening the chat.</p>
@@ -234,10 +232,10 @@ export default function ChatbotConfigPage() {
 
               <div className="space-y-2">
                 <Label>System Prompt</Label>
-                <Textarea 
+                <Textarea
                   rows={4}
                   value={config.system_prompt}
-                  onChange={(e) => setConfig({...config, system_prompt: e.target.value})}
+                  onChange={(e) => setConfig({ ...config, system_prompt: e.target.value })}
                   placeholder="You are a polite assistant..."
                 />
                 <p className="text-xs text-muted-foreground">Instructions that dictate the AI's personality and rules.</p>
@@ -258,17 +256,17 @@ export default function ChatbotConfigPage() {
                   {PRESET_COLORS.map((color) => (
                     <button
                       key={color.value}
-                      onClick={() => setConfig({...config, theme_color: color.value})}
+                      onClick={() => setConfig({ ...config, theme_color: color.value })}
                       className={`w-8 h-8 rounded-full border-2 transition-transform ${config.theme_color === color.value ? 'scale-110 border-foreground shadow-md' : 'border-transparent hover:scale-105'}`}
                       style={{ backgroundColor: color.value }}
                       title={color.name}
                     />
                   ))}
                   <div className="flex items-center gap-2 ml-4 border-l pl-4 border-muted">
-                    <Input 
-                      type="color" 
+                    <Input
+                      type="color"
                       value={config.theme_color}
-                      onChange={(e) => setConfig({...config, theme_color: e.target.value})}
+                      onChange={(e) => setConfig({ ...config, theme_color: e.target.value })}
                       className="w-8 h-8 p-0 border-0 rounded-full overflow-hidden cursor-pointer"
                     />
                     <span className="text-xs text-muted-foreground font-mono uppercase">{config.theme_color}</span>
@@ -283,12 +281,11 @@ export default function ChatbotConfigPage() {
                   {Object.entries(ICONS).map(([name, IconComponent]) => (
                     <button
                       key={name}
-                      onClick={() => setConfig({...config, chat_icon: name})}
-                      className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${
-                        config.chat_icon === name 
-                          ? 'text-white shadow-md' 
-                          : 'bg-muted text-muted-foreground hover:bg-muted/80'
-                      }`}
+                      onClick={() => setConfig({ ...config, chat_icon: name })}
+                      className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all ${config.chat_icon === name
+                        ? 'text-white shadow-md'
+                        : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                        }`}
                       style={{ backgroundColor: config.chat_icon === name ? config.theme_color : undefined }}
                     >
                       <IconComponent className="w-6 h-6" />
@@ -303,7 +300,7 @@ export default function ChatbotConfigPage() {
         {/* Right Column: Live Preview */}
         <div className="flex flex-col items-center pt-8">
           <div className="mb-4 text-sm font-medium text-muted-foreground uppercase tracking-widest">Live Preview</div>
-          
+
           {/* Mock Browser/Phone Window */}
           <div className="w-full max-w-[400px] h-[600px] bg-[var(--surface-container-lowest)] border border-[var(--outline-variant)] rounded-3xl shadow-2xl relative overflow-hidden flex flex-col">
             {/* Fake Header */}
@@ -314,7 +311,7 @@ export default function ChatbotConfigPage() {
                 <div className="w-3 h-3 rounded-full bg-green-400" />
               </div>
             </div>
-            
+
             {/* Fake Content */}
             <div className="flex-1 p-6 flex flex-col gap-4 opacity-30 pointer-events-none">
               <div className="h-8 w-3/4 bg-muted rounded-md" />
@@ -334,7 +331,7 @@ export default function ChatbotConfigPage() {
                     <span className="text-xs font-medium">Assistant</span>
                   </div>
                 </div>
-                
+
                 <div className="p-4 space-y-4 h-64 bg-background">
                   {/* Assistant Message */}
                   <div className="flex gap-3">
@@ -355,7 +352,7 @@ export default function ChatbotConfigPage() {
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="p-3 border-t border-[var(--outline-variant)] bg-[var(--surface)]">
                   <div className="flex gap-2">
                     <Input disabled placeholder="Ask about products..." className="flex-1 rounded-full text-xs h-9 pointer-events-none" />
@@ -367,7 +364,7 @@ export default function ChatbotConfigPage() {
               </div>
 
               {/* Chat Bubble Button Preview */}
-              <div 
+              <div
                 className="w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-white cursor-not-allowed"
                 style={{ backgroundColor: config.theme_color }}
               >

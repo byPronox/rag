@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Save, Code, Search, Store, Check, Sparkles, ShoppingBag, ArrowRight } from "lucide-react"
 
 // Importaciones de API y Contexto Multi-Compañía
-import { getCompanyConfig, updateCompanyConfig, CompanyConfig } from "@/lib/api"
+import { getCompanyConfig, updateCompanyConfig, CompanyConfig, RAG_API_URL } from "@/lib/api"
 import { useCompany } from "@/lib/company-context"
 
 const PRESET_COLORS = [
@@ -28,7 +28,7 @@ export default function SemanticSearchConfigPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [copied, setCopied] = useState(false)
   const [isSearchFocused, setIsSearchFocused] = useState(true) // Controla el estado del preview
-  
+
   // Extraemos el estado global de la compañía activa
   const { activeCompany, isLoadingCompanies } = useCompany()
 
@@ -83,30 +83,28 @@ export default function SemanticSearchConfigPage() {
 
   // Generador del Script de Búsqueda (Similar al chatbot pero para inyectar una barra de búsqueda)
   const embedCode = `
-<!-- Start RAG Semantic Search Bar -->
 <div id="rag-search-bar-container"></div>
 <script>
   window.RAG_SEARCH_CONFIG = {
     apiKey: "${config.system_api_key}",
     companyId: "${activeCompany?.company_id || 'ERROR_NO_COMPANY'}",
     color: "${config.theme_color}",
-    apiUrl: "${process.env.NEXT_PUBLIC_RAG_API_URL}"
+    apiUrl: "${RAG_API_URL}"
   };
 </script>
 <script src="https://rag-frontend-tan.vercel.app/search-widget.js" async></script>
-<!-- End RAG Semantic Search Bar -->
-  `.trim()
+`.trim()
 
   if (isLoadingCompanies || isLoading) {
     return (
       <div className="space-y-6 animate-in fade-in duration-500 max-w-7xl mx-auto">
         <div className="space-y-2">
-           <Skeleton className="h-8 w-48" />
-           <Skeleton className="h-4 w-72" />
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-72" />
         </div>
         <div className="grid gap-6 md:grid-cols-2">
-           <Skeleton className="h-[400px] w-full" />
-           <Skeleton className="h-[400px] w-full" />
+          <Skeleton className="h-[400px] w-full" />
+          <Skeleton className="h-[400px] w-full" />
         </div>
       </div>
     )
@@ -149,9 +147,9 @@ export default function SemanticSearchConfigPage() {
                 <pre className="bg-muted p-4 rounded-lg text-sm overflow-x-auto font-mono text-muted-foreground">
                   {embedCode}
                 </pre>
-                <Button 
-                  size="icon" 
-                  variant="secondary" 
+                <Button
+                  size="icon"
+                  variant="secondary"
                   className="absolute top-2 right-2 h-8 w-8"
                   onClick={() => copyToClipboard(embedCode)}
                 >
@@ -184,17 +182,17 @@ export default function SemanticSearchConfigPage() {
                   {PRESET_COLORS.map((color) => (
                     <button
                       key={color.value}
-                      onClick={() => setConfig({...config, theme_color: color.value})}
+                      onClick={() => setConfig({ ...config, theme_color: color.value })}
                       className={`w-8 h-8 rounded-full border-2 transition-transform ${config.theme_color === color.value ? 'scale-110 border-foreground shadow-md' : 'border-transparent hover:scale-105'}`}
                       style={{ backgroundColor: color.value }}
                       title={color.name}
                     />
                   ))}
                   <div className="flex items-center gap-2 ml-4 border-l pl-4 border-muted">
-                    <Input 
-                      type="color" 
+                    <Input
+                      type="color"
                       value={config.theme_color}
-                      onChange={(e) => setConfig({...config, theme_color: e.target.value})}
+                      onChange={(e) => setConfig({ ...config, theme_color: e.target.value })}
                       className="w-8 h-8 p-0 border-0 rounded-full overflow-hidden cursor-pointer"
                     />
                     <span className="text-xs text-muted-foreground font-mono uppercase">{config.theme_color}</span>
@@ -220,19 +218,19 @@ export default function SemanticSearchConfigPage() {
         {/* Right Column: Live Preview */}
         <div className="flex flex-col items-center pt-8">
           <div className="mb-4 text-sm font-medium text-muted-foreground uppercase tracking-widest">Live Preview</div>
-          
+
           {/* Mock E-commerce Header */}
           <div className="w-full max-w-[450px] bg-[var(--surface-container-lowest)] border border-[var(--outline-variant)] rounded-xl shadow-2xl relative flex flex-col overflow-visible">
-            
+
             {/* Fake Website Navbar */}
             <div className="h-16 bg-background border-b border-border flex items-center px-6 gap-6 rounded-t-xl z-20 relative">
               <div className="font-bold text-xl tracking-tight">STORE</div>
-              
+
               {/* THE SEARCH BAR PREVIEW */}
               <div className="flex-1 relative">
-                <div 
+                <div
                   className={`flex items-center h-10 px-3 bg-muted/50 rounded-full border transition-all cursor-text ${isSearchFocused ? 'ring-2 ring-opacity-20 border-transparent' : 'border-border hover:border-muted-foreground/30'}`}
-                  style={{ 
+                  style={{
                     borderColor: isSearchFocused ? config.theme_color : undefined,
                     boxShadow: isSearchFocused ? `0 0 0 3px ${config.theme_color}20` : undefined
                   }}
@@ -251,7 +249,7 @@ export default function SemanticSearchConfigPage() {
                       <Sparkles className="w-3.5 h-3.5" style={{ color: config.theme_color }} />
                       <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Semantic Results</span>
                     </div>
-                    
+
                     <div className="p-2 space-y-1">
                       {/* Fake Product 1 */}
                       <div className="flex gap-3 p-2 rounded-lg hover:bg-muted/50 cursor-pointer transition-colors group">
@@ -279,7 +277,7 @@ export default function SemanticSearchConfigPage() {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="p-3 border-t border-border bg-muted/10">
                       <button className="w-full flex items-center justify-center gap-2 text-xs font-medium hover:underline transition-all" style={{ color: config.theme_color }}>
                         View all 12 results <ArrowRight className="w-3 h-3" />
@@ -289,7 +287,7 @@ export default function SemanticSearchConfigPage() {
                 )}
               </div>
             </div>
-            
+
             {/* Fake Website Body */}
             <div className="h-64 p-6 opacity-30 pointer-events-none rounded-b-xl bg-background" onClick={() => setIsSearchFocused(false)}>
               <div className="h-32 w-full bg-muted rounded-xl mb-4" />

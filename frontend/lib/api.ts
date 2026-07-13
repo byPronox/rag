@@ -6,13 +6,13 @@ const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL;
 
 // 1. Apunta al Microservicio 2 (Core)
 // Si el Gateway existe, enruta por /core. Si no, usa la conexión directa (Fallback).
-const CORE_API_URL = GATEWAY_URL
+export const CORE_API_URL = GATEWAY_URL
   ? `${GATEWAY_URL}/core`
   : (process.env.NEXT_PUBLIC_CORE_API_URL || "http://localhost:8000");
 
 // 2. Apunta al Microservicio 3 (RAG / Chatbot)
 // Si el Gateway existe, enruta por /rag. Si no, usa la conexión directa (Fallback).
-const RAG_API_URL = GATEWAY_URL
+export const RAG_API_URL = GATEWAY_URL
   ? `${GATEWAY_URL}/rag`
   : (process.env.NEXT_PUBLIC_RAG_API_URL || "http://localhost:8001");
 
