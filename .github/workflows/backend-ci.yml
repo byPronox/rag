@@ -111,3 +111,33 @@ jobs:
       with:
         name: coverage-reports-${{ strategy.job-index }}
         path: ${{ matrix.microservice }}/coverage.xml
+
+  # ----------------------------------------------------
+  # NODO 3: Escáner de Vulnerabilidades de Artefactos (Trivy)
+  # ----------------------------------------------------
+  security-container:
+    name: Container Security Scan (Trivy)
+    needs: testing
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        microservice: 
+          - backend/microservice_1_sync
+          - backend/microservice_2_core
+          - backend/microservice_3_rag
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker Image
+        run: |
+          # Se asume que hay un Dockerfile en la carpeta de cada microservicio
+          docker build -t local-image-${{ strategy.job-index }}:latest ./${{ matrix.microservice }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'local-image-${{ strategy.job-index }}:latest'
+          format: 'table'
+          exit-code: '0'
+          severity: 'CRITICAL,HIGH'
