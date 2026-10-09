@@ -111,10 +111,9 @@ def test_texto_sin_cambios_no_revectoriza(mock_vector, mock_get_db, mock_rabbitm
 @patch('controllers.message_controller.get_db_connection')
 @patch('controllers.message_controller.send_feedback_to_odoo')
 @patch('controllers.message_controller.embedding_service.generate_vector')
-def test_compania_ajena_va_a_parking(mock_vector, mock_feedback, mock_get_db, mock_rabbitmq_channel):
-    """Un tenant no puede escribir productos en una compañía que no registró (aislamiento)."""
+def test_compania_desactivada_va_a_parking(mock_vector, mock_feedback, mock_get_db, mock_rabbitmq_channel):
     channel, method = mock_rabbitmq_channel
-    mock_conn, _ = _preparar_db(mock_get_db, [(99,), None])
+    mock_conn, _ = _preparar_db(mock_get_db, [(99,), None, (False,)])
 
     process_product_message(channel, method, None, json.dumps(PRODUCTO))
 
