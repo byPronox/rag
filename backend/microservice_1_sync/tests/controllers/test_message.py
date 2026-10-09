@@ -94,10 +94,9 @@ def test_producto_nuevo_se_vectoriza_y_guarda_hash(mock_vector, mock_get_db, moc
 @patch('controllers.message_controller.get_db_connection')
 @patch('controllers.message_controller.embedding_service.generate_vector')
 def test_texto_sin_cambios_no_revectoriza(mock_vector, mock_get_db, mock_rabbitmq_channel):
-    """Si solo cambió stock/precio (v2) o el texto es idéntico, no se llama al modelo."""
     channel, method = mock_rabbitmq_channel
     texto = build_embedding_text(PRODUCTO, "Product Name")
-    hash_actual = hashlib.sha256(texto.encode("utf-8")).hexdigest()
+    hash_actual = mc.compute_content_hash(texto)
     _, mock_cursor = _preparar_db(mock_get_db, [(99,), (1,), (hash_actual,)])
 
     process_product_message(channel, method, None, json.dumps(PRODUCTO))
@@ -322,3 +321,185 @@ def test_feedback_va_firmado_con_hmac(mock_post, _mock_safe):
     kwargs = mock_post.call_args.kwargs
     esperado = hmac.new(b"rag_abc", kwargs["data"], hashlib.sha256).hexdigest()
     assert kwargs["headers"]["X-RAG-Signature"] == esperado
+
+# ------------------------- Hash incluye modelo y versión (arreglo 2) -------------------------
+def test_hash_cambia_si_cambia_el_modelo_o_la_version():
+    texto = "Product: Mordedor."
+    with patch.object(mc.Config, "EMBEDDING_MODEL", "all-MiniLM-L6-v2"), \
+         patch.object(mc.Config, "EMBED_TEXT_VERSION", "v1"):
+        base = mc.compute_content_hash(texto)
+    with patch.object(mc.Config, "EMBEDDING_MODEL", "multilingual-e5-small"), \
+         patch.object(mc.Config, "EMBED_TEXT_VERSION", "v1"):
+        otro_modelo = mc.compute_content_hash(texto)
+    with patch.object(mc.Config, "EMBEDDING_MODEL", "all-MiniLM-L6-v2"), \
+         patch.object(mc.Config, "EMBED_TEXT_VERSION", "v2"):
+        otra_version = mc.compute_content_hash(texto)
+    assert len(base) == 64
+    assert base != otro_modelo
+    assert base != otra_version
+
+
+@patch('controllers.message_controller.get_db_connection')
+@patch('controllers.message_controller.embedding_service.generate_vector')
+def test_cambio_de_modelo_obliga_a_revectorizar(mock_vector, mock_get_db, mock_rabbitmq_channel):
+    """Regresión: antes, al cambiar el modelo se reutilizaba el vector del modelo anterior."""
+    channel, method = mock_rabbitmq_channel
+    texto = build_embedding_text(PRODUCTO, "Product Name")
+    with patch.object(mc.Config, "EMBEDDING_MODEL", "modelo-viejo"):
+        hash_viejo = mc.compute_content_hash(texto)
+    _, mock_cursor = _preparar_db(mock_get_db, [(99,), (1,), (hash_viejo,)])
+    mock_vector.return_value = [0.3]
+
+    with patch.object(mc.Config, "EMBEDDING_MODEL", "modelo-nuevo"):
+        process_product_message(channel, method, None, json.dumps(PRODUCTO))
+
+    mock_vector.assert_called_once()
+    sql, params = mock_cursor.execute.call_args_list[-1][0]
+    assert "INSERT INTO product_embeddings" in sql
+    assert params[22] == "modelo-nuevo"  # columna embedding_model
+    channel.basic_ack.assert_called_once()
+
+
+# ------------------------- Orden de eventos (arreglo 1) -------------------------
+def test_normalize_event_ts():
+    assert mc.normalize_event_ts(1700000000000000) == 1700000000000000
+    assert mc.normalize_event_ts("456") == 456
+    assert mc.normalize_event_ts(None) is None
+    assert mc.normalize_event_ts(True) is None
+    assert mc.normalize_event_ts("abc") is None
+    assert mc.normalize_event_ts(0) is None
+    assert mc.normalize_event_ts(-5) is None
+
+
+@patch('controllers.message_controller.get_db_connection')
+@patch('controllers.message_controller.embedding_service.generate_vector')
+def test_evento_viejo_se_descarta_sin_pisar_datos(mock_vector, mock_get_db, mock_rabbitmq_channel):
+    """Regresión: un reintento atrasado ya no sobrescribe un precio/stock más nuevo."""
+    channel, method = mock_rabbitmq_channel
+    mock_conn, mock_cursor = _preparar_db(mock_get_db, [(99,), None])
+    payload = {**PRODUCTO, "event_ts": 1000}
+
+    process_product_message(channel, method, None, json.dumps(payload))
+
+    assert mock_cursor.execute.call_count == 2
+    assert "product_sync_versions" in mock_cursor.execute.call_args_list[1][0][0]
+    mock_vector.assert_not_called()
+    mock_conn.commit.assert_called_once()
+    channel.basic_ack.assert_called_once()
+    channel.basic_publish.assert_not_called()  # no va a retry ni parking
+
+
+@patch('controllers.message_controller.get_db_connection')
+@patch('controllers.message_controller.embedding_service.generate_vector')
+def test_evento_nuevo_registra_version_y_se_aplica(mock_vector, mock_get_db, mock_rabbitmq_channel):
+    channel, method = mock_rabbitmq_channel
+    ts = 1700000000000000
+    # auth, versión aceptada, compañía registrada, sin hash previo
+    mock_conn, mock_cursor = _preparar_db(mock_get_db, [(99,), (ts,), (1,), None])
+    mock_vector.return_value = [0.5]
+    payload = {**PRODUCTO, "event_ts": ts}
+
+    process_product_message(channel, method, None, json.dumps(payload))
+
+    assert mock_cursor.execute.call_count == 5
+    sql_version, params_version = mock_cursor.execute.call_args_list[1][0]
+    assert "product_sync_versions" in sql_version
+    assert params_version == (99, 123, ts)
+    assert "INSERT INTO product_embeddings" in mock_cursor.execute.call_args_list[4][0][0]
+    mock_vector.assert_called_once()
+    mock_conn.commit.assert_called_once()
+
+
+@patch('controllers.message_controller.get_db_connection')
+def test_delete_deja_lapida_de_version(mock_get_db, mock_rabbitmq_channel):
+    """El borrado registra su versión: un create viejo que llegue después no resucita el producto."""
+    channel, method = mock_rabbitmq_channel
+    ts = 1700000000000000
+    mock_conn, mock_cursor = _preparar_db(mock_get_db, [(99,), (ts,)])
+
+    process_product_message(channel, method, None, json.dumps(
+        {"api_key": "valid_key", "action": "delete", "variant_id": 123, "event_ts": ts}))
+
+    assert mock_cursor.execute.call_count == 3
+    assert "product_sync_versions" in mock_cursor.execute.call_args_list[1][0][0]
+    sql, params = mock_cursor.execute.call_args_list[2][0]
+    assert "DELETE FROM product_embeddings" in sql
+    assert params == (123, 99)
+    mock_conn.commit.assert_called_once()
+
+
+@patch('controllers.message_controller.get_db_connection')
+def test_delete_viejo_no_borra(mock_get_db, mock_rabbitmq_channel):
+    channel, method = mock_rabbitmq_channel
+    _, mock_cursor = _preparar_db(mock_get_db, [(99,), None])
+
+    process_product_message(channel, method, None, json.dumps(
+        {"api_key": "valid_key", "action": "delete", "variant_id": 123, "event_ts": 1000}))
+
+    assert mock_cursor.execute.call_count == 2
+    sqls = [c[0][0] for c in mock_cursor.execute.call_args_list]
+    assert not any("DELETE FROM product_embeddings" in s for s in sqls)
+    channel.basic_ack.assert_called_once()
+
+
+# ------------------------- Reconciliación de huérfanos (arreglo 4) -------------------------
+@patch('controllers.message_controller.get_db_connection')
+def test_reconcile_borra_huerfanos_y_deja_lapidas(mock_get_db, mock_rabbitmq_channel):
+    channel, method = mock_rabbitmq_channel
+    ts = 1700000000000000
+    mock_conn, mock_cursor = _preparar_db(mock_get_db, (99,))
+    mock_cursor.fetchall.return_value = [(7,), (8,)]  # huérfanos encontrados
+
+    process_product_message(channel, method, None, json.dumps(
+        {"api_key": "valid_key", "action": "reconcile", "variant_ids": [2, 1, 2], "event_ts": ts}))
+
+    assert mock_cursor.execute.call_count == 3
+    sql_delete, params_delete = mock_cursor.execute.call_args_list[1][0]
+    assert "DELETE FROM product_embeddings" in sql_delete
+    margen = mc.Config.RECONCILE_GRACE_MINUTES * 60 * 1_000_000
+    assert params_delete == (99, [1, 2], ts - margen)  # IDs únicos y ordenados
+    sql_lapidas, params_lapidas = mock_cursor.execute.call_args_list[2][0]
+    assert "product_sync_versions" in sql_lapidas
+    assert params_lapidas == (99, [7, 8], ts)
+    mock_conn.commit.assert_called_once()
+    channel.basic_ack.assert_called_once()
+
+
+@patch('controllers.message_controller.get_db_connection')
+def test_reconcile_sin_huerfanos_no_crea_lapidas(mock_get_db, mock_rabbitmq_channel):
+    channel, method = mock_rabbitmq_channel
+    mock_conn, mock_cursor = _preparar_db(mock_get_db, (99,))
+    mock_cursor.fetchall.return_value = []
+
+    process_product_message(channel, method, None, json.dumps(
+        {"api_key": "valid_key", "action": "reconcile", "variant_ids": [1], "event_ts": 1700000000000000}))
+
+    assert mock_cursor.execute.call_count == 2
+    mock_conn.commit.assert_called_once()
+
+
+@patch('controllers.message_controller.get_db_connection')
+@patch('controllers.message_controller.send_feedback_to_odoo')
+def test_reconcile_invalido_va_a_parking(mock_feedback, mock_get_db, mock_rabbitmq_channel):
+    """Sin lista o sin event_ts no se borra nada: va a parking."""
+    channel, method = mock_rabbitmq_channel
+    mock_conn, _ = _preparar_db(mock_get_db, (99,))
+
+    process_product_message(channel, method, None, json.dumps(
+        {"api_key": "valid_key", "action": "reconcile", "variant_ids": "1,2", "event_ts": 1700000000000000}))
+
+    mock_conn.commit.assert_not_called()
+    assert _cola_publicada(channel) == mc.Config.PARKING_QUEUE_NAME
+    mock_feedback.assert_called_once()
+
+
+@patch('controllers.message_controller.get_db_connection')
+def test_reconcile_sin_event_ts_va_a_parking(mock_get_db, mock_rabbitmq_channel):
+    channel, method = mock_rabbitmq_channel
+    mock_conn, _ = _preparar_db(mock_get_db, (99,))
+
+    process_product_message(channel, method, None, json.dumps(
+        {"api_key": "valid_key", "action": "reconcile", "variant_ids": [1]}))
+
+    mock_conn.commit.assert_not_called()
+    assert _cola_publicada(channel) == mc.Config.PARKING_QUEUE_NAME
