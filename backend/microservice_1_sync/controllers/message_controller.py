@@ -19,7 +19,6 @@ log = logging.getLogger("sync.worker")
 VALID_PRODUCT_ACTIONS = ("create", "update", "sync")
 
 GLOBAL_COMPANY_ID = "global"
-# Valores que versiones anteriores del módulo de Odoo enviaban para "sin compañía"
 _LEGACY_NO_COMPANY = {"", "False", "None", "false", "none"}
 
 
@@ -33,6 +32,13 @@ class PermanentError(Exception):
 def normalize_company_id(raw):
     value = "" if raw is None else str(raw).strip()
     return GLOBAL_COMPANY_ID if value in _LEGACY_NO_COMPANY else value
+
+
+def normalize_template_id(raw):  # NUEVO
+    if isinstance(raw, bool) or raw is None:
+        return None
+    value = str(raw).strip()
+    return int(value) if value.isdigit() else None
 
 
 def clean_display_name(raw_name):
@@ -128,6 +134,9 @@ def republish(ch, queue, body, properties, extra_headers):
     )
 
 
+# ---------------------------------------------------------------------------
+# Lógica de negocio
+# ---------------------------------------------------------------------------
 def _authenticate_tenant(cur, api_key, action):
     if not api_key:
         raise PermanentError(f"Missing API Key for action {action}.")
@@ -199,6 +208,7 @@ def _upsert_product(cur, user_id, data):
 
     text_to_embed = build_embedding_text(data, clean_name)
     content_hash = hashlib.sha256(text_to_embed.encode("utf-8")).hexdigest()
+    template_id = normalize_template_id(data.get('template_id'))
 
     structured = (
         data.get('sku'), clean_name, data.get('description'),
@@ -220,9 +230,10 @@ def _upsert_product(cur, user_id, data):
                 price_excluded = %s, price_included = %s, tax_percent = %s, currency = %s,
                 stock = %s, category = %s, website_url = %s,
                 image_128_url = %s, image_512_url = %s, image_1920_url = %s,
-                company_id = %s, company_name = %s, accessories = %s, alternatives = %s
+                company_id = %s, company_name = %s, accessories = %s, alternatives = %s,
+                template_id = %s
             WHERE variant_id = %s AND user_id = %s
-        """, (*structured, variant_id, user_id))
+        """, (*structured, template_id, variant_id, user_id))
         log.info("Variant %s updated (embedding reused, text unchanged).", variant_id)
         return
 
@@ -232,11 +243,11 @@ def _upsert_product(cur, user_id, data):
             variant_id, user_id, sku, display_name, description,
             price_excluded, price_included, tax_percent, currency,
             stock, category, website_url, image_128_url, image_512_url, image_1920_url,
-            company_id, company_name, accessories, alternatives, embedding, content_hash
+            company_id, company_name, accessories, alternatives, embedding, content_hash, template_id
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s)
+                %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (variant_id, user_id) DO UPDATE SET
             sku = EXCLUDED.sku,
             display_name = EXCLUDED.display_name,
@@ -256,9 +267,10 @@ def _upsert_product(cur, user_id, data):
             accessories = EXCLUDED.accessories,
             alternatives = EXCLUDED.alternatives,
             embedding = EXCLUDED.embedding,
-            content_hash = EXCLUDED.content_hash;
-    """, (variant_id, user_id, *structured, vector, content_hash))
-    log.info("Variant %s embedded and saved securely.", variant_id)
+            content_hash = EXCLUDED.content_hash,
+            template_id = EXCLUDED.template_id;
+    """, (variant_id, user_id, *structured, vector, content_hash, template_id))
+    log.info("Variant %s (template %s) embedded and saved securely.", variant_id, template_id)
 
 
 def _handle(cur, data):
