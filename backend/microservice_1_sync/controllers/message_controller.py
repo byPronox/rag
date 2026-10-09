@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import socket
+import time
 from urllib.parse import urlparse
 
 import pika
@@ -237,7 +238,9 @@ def _upsert_product(cur, user_id, data):
         log.info("Variant %s updated (embedding reused, text unchanged).", variant_id)
         return
 
+    t0 = time.perf_counter()
     vector = embedding_service.generate_vector(text_to_embed)
+    embed_ms = (time.perf_counter() - t0) * 1000
     cur.execute("""
         INSERT INTO product_embeddings (
             variant_id, user_id, sku, display_name, description,
@@ -270,7 +273,7 @@ def _upsert_product(cur, user_id, data):
             content_hash = EXCLUDED.content_hash,
             template_id = EXCLUDED.template_id;
     """, (variant_id, user_id, *structured, vector, content_hash, template_id))
-    log.info("Variant %s (template %s) embedded and saved securely.", variant_id, template_id)
+    log.info("Variant %s (template %s) embedded in %.0f ms and saved securely.", variant_id, template_id, embed_ms)
 
 
 def _handle(cur, data):
