@@ -1,5 +1,6 @@
 import hashlib
 import json
+import hmac
 from unittest.mock import patch, MagicMock
 import pika
 import requests
@@ -290,3 +291,35 @@ def test_feedback_sin_url_no_hace_nada(mock_post):
 def test_feedback_a_url_insegura_no_se_envia(mock_post, _mock_safe):
     send_feedback_to_odoo("http://169.254.169.254/latest", 123, "x")
     mock_post.assert_not_called()
+
+@patch('controllers.message_controller.get_db_connection')
+@patch('controllers.message_controller.embedding_service.generate_vector')
+def test_producto_sin_compania_se_guarda_como_global(mock_vector, mock_get_db, mock_rabbitmq_channel):
+    channel, method = mock_rabbitmq_channel
+    _, mock_cursor = _preparar_db(mock_get_db, [(99,), None])
+    mock_vector.return_value = [0.1]
+    payload = {**PRODUCTO, "company_id": "global", "company_name": "All Companies"}
+
+    process_product_message(channel, method, None, json.dumps(payload))
+
+    assert mock_cursor.execute.call_count == 3
+    params = mock_cursor.execute.call_args_list[2][0][1]
+    assert params[15] == "global"
+    channel.basic_ack.assert_called_once()
+
+
+def test_company_id_legacy_false_se_normaliza_a_global():
+    """Compatibilidad: versiones viejas del módulo enviaban False."""
+    assert mc.normalize_company_id(False) == "global"
+    assert mc.normalize_company_id("False") == "global"
+    assert mc.normalize_company_id(None) == "global"
+    assert mc.normalize_company_id(3) == "3"
+
+
+@patch('controllers.message_controller.is_safe_webhook_url', return_value=True)
+@patch('controllers.message_controller.requests.post')
+def test_feedback_va_firmado_con_hmac(mock_post, _mock_safe):
+    send_feedback_to_odoo("https://odoo.test/api/rag/feedback", 7, "fallo", api_key="rag_abc")
+    kwargs = mock_post.call_args.kwargs
+    esperado = hmac.new(b"rag_abc", kwargs["data"], hashlib.sha256).hexdigest()
+    assert kwargs["headers"]["X-RAG-Signature"] == esperado
