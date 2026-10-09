@@ -1,12 +1,15 @@
 import hashlib
+import hmac
 import ipaddress
 import json
 import logging
 import re
 import socket
 from urllib.parse import urlparse
+
 import pika
 import requests
+
 from config.settings import Config
 from database.connection import get_db_connection
 from services.embedding_service import embedding_service
@@ -14,6 +17,10 @@ from services.embedding_service import embedding_service
 log = logging.getLogger("sync.worker")
 
 VALID_PRODUCT_ACTIONS = ("create", "update", "sync")
+
+GLOBAL_COMPANY_ID = "global"
+# Valores que versiones anteriores del módulo de Odoo enviaban para "sin compañía"
+_LEGACY_NO_COMPANY = {"", "False", "None", "false", "none"}
 
 
 class PermanentError(Exception):
@@ -23,6 +30,11 @@ class PermanentError(Exception):
 # ---------------------------------------------------------------------------
 # Utilidades
 # ---------------------------------------------------------------------------
+def normalize_company_id(raw):
+    value = "" if raw is None else str(raw).strip()
+    return GLOBAL_COMPANY_ID if value in _LEGACY_NO_COMPANY else value
+
+
 def clean_display_name(raw_name):
     """'[SKU1] Producto' -> 'Producto'"""
     return re.sub(r'^\[.*?\]\s*', '', raw_name or '')
@@ -82,17 +94,21 @@ def is_safe_webhook_url(url):
     return True
 
 
-def send_feedback_to_odoo(webhook_url, variant_id, error_message):
+def send_feedback_to_odoo(webhook_url, variant_id, error_message, api_key=None):
     if not webhook_url:
         return
     if not is_safe_webhook_url(webhook_url):
         log.warning("Webhook URL rejected (unsafe): %s", webhook_url)
         return
+    body = json.dumps({"variant_id": variant_id, "error": error_message}).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if api_key:
+        # Odoo verifica esta firma con su API key: nadie más puede inyectar errores falsos.
+        headers["X-RAG-Signature"] = hmac.new(api_key.encode("utf-8"), body, hashlib.sha256).hexdigest()
     try:
-        payload = {"variant_id": variant_id, "error": error_message}
-        response = requests.post(webhook_url, json=payload, timeout=5)
+        response = requests.post(webhook_url, data=body, headers=headers, timeout=5)
         log.info("Sent error feedback to Odoo. Status: %s", response.status_code)
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         log.warning("Could not reach Odoo webhook: %s", e)
 
 
@@ -112,12 +128,28 @@ def republish(ch, queue, body, properties, extra_headers):
     )
 
 
-# ---------------------------------------------------------------------------
-# Lógica de negocio
-# ---------------------------------------------------------------------------
+def _authenticate_tenant(cur, api_key, action):
+    if not api_key:
+        raise PermanentError(f"Missing API Key for action {action}.")
+    cur.execute("""
+        SELECT uc.user_id
+        FROM user_configs uc
+        JOIN users u ON u.id = uc.user_id
+        WHERE uc.system_api_key = %s AND uc.is_active = TRUE AND u.is_active = TRUE
+    """, (api_key,))
+    row = cur.fetchone()
+    if not row:
+        raise PermanentError(f"Invalid or missing API Key for action {action}.")
+    return row[0]
+
+
 def _sync_companies(cur, user_id, data):
-    companies_data = data.get('companies', [])
+    companies_data = data.get('companies')
+    if not isinstance(companies_data, list):
+        raise PermanentError("'companies' must be a list.")
     for comp in companies_data:
+        if not isinstance(comp, dict) or comp.get('id') in (None, "") or not comp.get('name'):
+            raise PermanentError(f"Invalid company in handshake: {comp}")
         cur.execute("""
             INSERT INTO user_companies (user_id, platform, platform_company_id, company_name)
             VALUES (%s, 'odoo', %s, %s)
@@ -127,17 +159,39 @@ def _sync_companies(cur, user_id, data):
     log.info("Handshake complete. Tenant %s synced %d companies.", user_id, len(companies_data))
 
 
-def _upsert_product(cur, user_id, data):
-    variant_id = data.get('variant_id')
-    company_id = str(data.get('company_id'))
+def _ensure_company(cur, user_id, company_id, company_name):
+    """
+    Integridad tenant -> compañía (no hay FK en la BD porque existe 'global').
+    - 'global' (producto compartido en Odoo): no requiere registro.
+    - Compañía nueva (creada en Odoo después del handshake): se registra automáticamente.
+    - Compañía desactivada por el administrador: se rechaza el producto.
+    """
+    if company_id == GLOBAL_COMPANY_ID:
+        return
 
     cur.execute("""
-        SELECT 1 FROM user_companies
-        WHERE user_id = %s AND platform_company_id = %s AND is_active = TRUE
+        INSERT INTO user_companies (user_id, platform, platform_company_id, company_name)
+        VALUES (%s, 'odoo', %s, %s)
+        ON CONFLICT (user_id, platform, platform_company_id) DO NOTHING
+        RETURNING id
+    """, (user_id, company_id, company_name or f"Company {company_id}"))
+    if cur.fetchone():
+        log.info("Company %s auto-registered for tenant %s", company_id, user_id)
+        return
+
+    cur.execute("""
+        SELECT is_active FROM user_companies
+        WHERE user_id = %s AND platform = 'odoo' AND platform_company_id = %s
     """, (user_id, company_id))
-    if not cur.fetchone():
-        raise PermanentError(
-            f"Company {company_id} is not registered for this tenant. Run the company handshake first.")
+    row = cur.fetchone()
+    if not row or not row[0]:
+        raise PermanentError(f"Company {company_id} is deactivated for this tenant.")
+
+
+def _upsert_product(cur, user_id, data):
+    variant_id = data.get('variant_id')
+    company_id = normalize_company_id(data.get('company_id'))
+    _ensure_company(cur, user_id, company_id, data.get('company_name'))
 
     clean_name = clean_display_name(data.get('display_name', ''))
     if not clean_name:
@@ -208,17 +262,8 @@ def _upsert_product(cur, user_id, data):
 
 
 def _handle(cur, data):
-    api_key = data.get('api_key')
     action = data.get('action')
-
-    if not api_key:
-        raise PermanentError(f"Missing API Key for action {action}.")
-
-    cur.execute("SELECT user_id FROM user_configs WHERE system_api_key = %s AND is_active = TRUE", (api_key,))
-    user = cur.fetchone()
-    if not user:
-        raise PermanentError(f"Invalid or missing API Key for action {action}.")
-    user_id = user[0]
+    user_id = _authenticate_tenant(cur, data.get('api_key'), action)
     log.info("Processing '%s' (Tenant ID: %s)...", action, user_id)
 
     if action == 'sync_companies':
@@ -244,6 +289,7 @@ def process_product_message(ch, method, properties, body):
     conn = None
     variant_id = None
     webhook_url = None
+    api_key = None
 
     try:
         try:
@@ -255,6 +301,7 @@ def process_product_message(ch, method, properties, body):
 
         variant_id = data.get('variant_id')
         webhook_url = data.get('webhook_url')
+        api_key = data.get('api_key')
 
         conn = get_db_connection()
         with conn.cursor() as cur:
@@ -267,7 +314,7 @@ def process_product_message(ch, method, properties, body):
             conn.rollback()
         log.error("[PARKING] variant=%s: %s", variant_id, e)
         republish(ch, Config.PARKING_QUEUE_NAME, body, properties, {"x-error": str(e)[:500]})
-        send_feedback_to_odoo(webhook_url, variant_id, str(e))
+        send_feedback_to_odoo(webhook_url, variant_id, str(e), api_key)
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
     except Exception as e:
@@ -278,7 +325,7 @@ def process_product_message(ch, method, properties, body):
         if attempts >= Config.MAX_RETRIES:
             log.error("[PARKING] variant=%s failed after %d retries: %s", variant_id, attempts, e)
             republish(ch, Config.PARKING_QUEUE_NAME, body, properties, {"x-error": error_msg[:500]})
-            send_feedback_to_odoo(webhook_url, variant_id, error_msg)
+            send_feedback_to_odoo(webhook_url, variant_id, error_msg, api_key)
         else:
             log.warning("[RETRY %d/%d] variant=%s: %s", attempts + 1, Config.MAX_RETRIES, variant_id, e)
             republish(ch, Config.RETRY_QUEUE_NAME, body, properties,
