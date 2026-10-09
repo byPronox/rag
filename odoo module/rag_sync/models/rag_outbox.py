@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 
 from odoo import api, fields, models
 
@@ -22,8 +23,11 @@ class RagOutbox(models.Model):
 
     @api.model
     def _rag_dedupe_key(self, payload):
-        if payload.get('action') == 'sync_companies':
+        action = payload.get('action')
+        if action == 'sync_companies':
             return 'companies'
+        if action == 'reconcile':
+            return 'reconcile'
         if payload.get('variant_id'):
             return f"variant:{payload['variant_id']}"
         return None
@@ -45,6 +49,8 @@ class RagOutbox(models.Model):
         outbox = self.sudo()
         tx_rows = self.env.cr.precommit.data.setdefault('rag_outbox_rows', {})
         for payload in payloads:
+            payload = dict(payload)
+            payload.setdefault('event_ts', time.time_ns() // 1000)
             key = self._rag_dedupe_key(payload)
             values = {
                 'payload': json.dumps(payload, default=str),

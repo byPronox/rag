@@ -24,6 +24,10 @@
                         <setting string="Public Base URL" help="Your Ngrok or Production URL for serving images">
                             <field name="rag_public_base_url"/>
                         </setting>
+                        <setting string="Full Resync" help="Re-sends every published product to the AI and removes from the index the products that no longer exist in Odoo.">
+                            <button name="action_rag_full_resync" type="object"
+                                string="Run full resync" class="btn-secondary" icon="fa-refresh"/>
+                        </setting>
                     </block>
                 </app>
             </xpath>

@@ -19,6 +19,7 @@ class Config:
     PARKING_QUEUE_NAME = os.getenv("RABBITMQ_PARKING_QUEUE") or f"{QUEUE_NAME}.parking"
     RETRY_DELAY_MS = int(os.getenv("RABBITMQ_RETRY_DELAY_MS", "15000"))
     MAX_RETRIES = int(os.getenv("SYNC_MAX_RETRIES", "3"))
+    RECONCILE_GRACE_MINUTES = int(os.getenv("RECONCILE_GRACE_MINUTES", "10"))
     PREFETCH_COUNT = int(os.getenv("RABBITMQ_PREFETCH", "1"))
 
     # --- Modelo de IA (MS1 y MS3 deben usar el mismo) ---

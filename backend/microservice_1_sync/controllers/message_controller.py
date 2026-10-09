@@ -35,11 +35,25 @@ def normalize_company_id(raw):
     return GLOBAL_COMPANY_ID if value in _LEGACY_NO_COMPANY else value
 
 
-def normalize_template_id(raw):  # NUEVO
+def normalize_template_id(raw):
     if isinstance(raw, bool) or raw is None:
         return None
     value = str(raw).strip()
     return int(value) if value.isdigit() else None
+
+
+def normalize_event_ts(raw):
+    """Versión del evento en microsegundos. None si no viene (mensajes antiguos en la cola)."""
+    if isinstance(raw, bool) or raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        value = int(raw)
+    else:
+        text = str(raw).strip()
+        if not text.isdigit():
+            return None
+        value = int(text)
+    return value if value > 0 else None
 
 
 def clean_display_name(raw_name):
@@ -75,6 +89,12 @@ def build_embedding_text(data, clean_name):
         f"Accessories for this product: {data.get('accessories', 'None')}. "
         f"Alternative products: {data.get('alternatives', 'None')}."
     )
+
+
+def compute_content_hash(text_to_embed):
+    """El hash incluye modelo y versión del texto: si cambia cualquiera, el vector se recalcula."""
+    key = f"{Config.EMBEDDING_MODEL}|{Config.EMBED_TEXT_VERSION}|{text_to_embed}"
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 
 def is_safe_webhook_url(url):
@@ -198,6 +218,20 @@ def _ensure_company(cur, user_id, company_id, company_name):
         raise PermanentError(f"Company {company_id} is deactivated for this tenant.")
 
 
+def _claim_version(cur, user_id, variant_id, event_ts):
+    if event_ts is None:
+        return True
+    cur.execute("""
+        INSERT INTO product_sync_versions (user_id, variant_id, source_ts)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (user_id, variant_id) DO UPDATE
+            SET source_ts = EXCLUDED.source_ts, updated_at = CURRENT_TIMESTAMP
+            WHERE product_sync_versions.source_ts <= EXCLUDED.source_ts
+        RETURNING source_ts
+    """, (user_id, variant_id, event_ts))
+    return cur.fetchone() is not None
+
+
 def _upsert_product(cur, user_id, data):
     variant_id = data.get('variant_id')
     company_id = normalize_company_id(data.get('company_id'))
@@ -208,7 +242,7 @@ def _upsert_product(cur, user_id, data):
         raise PermanentError("display_name is empty")
 
     text_to_embed = build_embedding_text(data, clean_name)
-    content_hash = hashlib.sha256(text_to_embed.encode("utf-8")).hexdigest()
+    content_hash = compute_content_hash(text_to_embed)
     template_id = normalize_template_id(data.get('template_id'))
 
     structured = (
@@ -235,7 +269,7 @@ def _upsert_product(cur, user_id, data):
                 template_id = %s
             WHERE variant_id = %s AND user_id = %s
         """, (*structured, template_id, variant_id, user_id))
-        log.info("Variant %s updated (embedding reused, text unchanged).", variant_id)
+        log.info("Variant %s updated (embedding reused, text and model unchanged).", variant_id)
         return
 
     t0 = time.perf_counter()
@@ -246,11 +280,12 @@ def _upsert_product(cur, user_id, data):
             variant_id, user_id, sku, display_name, description,
             price_excluded, price_included, tax_percent, currency,
             stock, category, website_url, image_128_url, image_512_url, image_1920_url,
-            company_id, company_name, accessories, alternatives, embedding, content_hash, template_id
+            company_id, company_name, accessories, alternatives,
+            embedding, content_hash, template_id, embedding_model
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s)
         ON CONFLICT (variant_id, user_id) DO UPDATE SET
             sku = EXCLUDED.sku,
             display_name = EXCLUDED.display_name,
@@ -271,18 +306,72 @@ def _upsert_product(cur, user_id, data):
             alternatives = EXCLUDED.alternatives,
             embedding = EXCLUDED.embedding,
             content_hash = EXCLUDED.content_hash,
-            template_id = EXCLUDED.template_id;
-    """, (variant_id, user_id, *structured, vector, content_hash, template_id))
-    log.info("Variant %s (template %s) embedded in %.0f ms and saved securely.", variant_id, template_id, embed_ms)
+            template_id = EXCLUDED.template_id,
+            embedding_model = EXCLUDED.embedding_model;
+    """, (variant_id, user_id, *structured, vector, content_hash, template_id, Config.EMBEDDING_MODEL))
+    log.info("Variant %s (template %s) embedded with %s in %.0f ms and saved securely.",
+             variant_id, template_id, Config.EMBEDDING_MODEL, embed_ms)
+
+
+def _reconcile(cur, user_id, data, event_ts):
+    """
+    Odoo manda la lista COMPLETA de variantes que deben estar en el índice.
+    Se borra todo lo demás de este tenant (productos huérfanos), excepto lo sincronizado
+    en los últimos RECONCILE_GRACE_MINUTES (evita borrar un producto creado en Odoo
+    mientras se armaba la lista).
+    """
+    if event_ts is None:
+        raise PermanentError("reconcile requires event_ts.")
+    variant_ids = data.get('variant_ids')
+    if not isinstance(variant_ids, list):
+        raise PermanentError("'variant_ids' must be a list.")
+    try:
+        valid_ids = sorted({int(v) for v in variant_ids})
+    except (TypeError, ValueError) as e:
+        raise PermanentError(f"Invalid variant id in reconcile: {e}") from e
+
+    keep_newer_than = event_ts - Config.RECONCILE_GRACE_MINUTES * 60 * 1_000_000
+
+    cur.execute("""
+        DELETE FROM product_embeddings pe
+        WHERE pe.user_id = %s
+          AND pe.variant_id NOT IN (SELECT unnest(%s::int[]))
+          AND NOT EXISTS (
+              SELECT 1 FROM product_sync_versions v
+              WHERE v.user_id = pe.user_id
+                AND v.variant_id = pe.variant_id
+                AND v.source_ts > %s
+          )
+        RETURNING pe.variant_id
+    """, (user_id, valid_ids, keep_newer_than))
+    removed = [row[0] for row in cur.fetchall()]
+
+    if removed:
+        # Lápidas: un create/update viejo que llegue después no puede resucitarlos
+        cur.execute("""
+            INSERT INTO product_sync_versions (user_id, variant_id, source_ts)
+            SELECT %s, unnest(%s::int[]), %s
+            ON CONFLICT (user_id, variant_id) DO UPDATE
+                SET source_ts = EXCLUDED.source_ts, updated_at = CURRENT_TIMESTAMP
+                WHERE product_sync_versions.source_ts <= EXCLUDED.source_ts
+        """, (user_id, removed, event_ts))
+
+    log.info("Reconcile for tenant %s: %d valid variant(s) in Odoo, %d orphan(s) removed %s",
+             user_id, len(valid_ids), len(removed), removed[:20])
 
 
 def _handle(cur, data):
     action = data.get('action')
     user_id = _authenticate_tenant(cur, data.get('api_key'), action)
+    event_ts = normalize_event_ts(data.get('event_ts'))
     log.info("Processing '%s' (Tenant ID: %s)...", action, user_id)
 
     if action == 'sync_companies':
         _sync_companies(cur, user_id, data)
+        return
+
+    if action == 'reconcile':
+        _reconcile(cur, user_id, data, event_ts)
         return
 
     if action not in VALID_PRODUCT_ACTIONS and action != 'delete':
@@ -292,12 +381,26 @@ def _handle(cur, data):
     if variant_id is None:
         raise PermanentError("variant_id is required.")
 
+    if not _claim_version(cur, user_id, variant_id, event_ts):
+        log.info("Variant %s: stale '%s' event skipped (event_ts=%s is older than the last applied).",
+                 variant_id, action, event_ts)
+        return
+
     if action == 'delete':
         cur.execute("DELETE FROM product_embeddings WHERE variant_id = %s AND user_id = %s", (variant_id, user_id))
         log.info("Variant %s deleted securely.", variant_id)
         return
 
     _upsert_product(cur, user_id, data)
+
+
+def _log_sync_lag(data):
+    """Latencia extremo a extremo: guardado en Odoo -> aplicado en el índice (métrica para RNF-03)."""
+    event_ts = normalize_event_ts(data.get('event_ts'))
+    if event_ts:
+        lag_ms = (time.time_ns() // 1000 - event_ts) / 1000
+        log.info("[LAG] action=%s variant=%s sync_lag_ms=%.0f",
+                 data.get('action'), data.get('variant_id'), lag_ms)
 
 
 def process_product_message(ch, method, properties, body):
@@ -323,6 +426,7 @@ def process_product_message(ch, method, properties, body):
             _handle(cur, data)
         conn.commit()
         ch.basic_ack(delivery_tag=method.delivery_tag)
+        _log_sync_lag(data)
 
     except PermanentError as e:
         if conn:

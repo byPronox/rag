@@ -2,15 +2,18 @@
 -- INITIALIZATION SCRIPT - SAAS RAG ENTERPRISE
 -- Multi-Tenant & Multi-Company Architecture
 -- ==========================================
+-- WARNING: this script DROPS every table. Use it only to create a NEW database.
+-- For an existing database, apply the migrations instead.
 
 -- 1. Enable AI extension (pgvector)
 CREATE EXTENSION IF NOT EXISTS vector;
 
 -- 2. Drop existing tables in reverse order of dependencies (Clean DB reset)
+DROP TABLE IF EXISTS product_sync_versions CASCADE;
 DROP TABLE IF EXISTS product_embeddings CASCADE;
 DROP TABLE IF EXISTS chat_history CASCADE;
 DROP TABLE IF EXISTS search_history CASCADE;
-DROP TABLE IF EXISTS user_companies CASCADE; -- NEW: Multi-company config
+DROP TABLE IF EXISTS user_companies CASCADE;
 DROP TABLE IF EXISTS user_configs CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 DROP TABLE IF EXISTS global_settings CASCADE;
@@ -34,11 +37,11 @@ CREATE TABLE ai_models (
 );
 
 -- Mandatory default models to prevent system crashes on startup
-INSERT INTO ai_models (id, name, provider, type, is_active, description, dimensions) 
+INSERT INTO ai_models (id, name, provider, type, is_active, description, dimensions)
 VALUES ('all-MiniLM-L6-v2', 'all-MiniLM-L6-v2', 'Sentence Transformers', 'embedding', true, 'Local embedding model', 384)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO ai_models (id, name, provider, type, is_active, description) 
+INSERT INTO ai_models (id, name, provider, type, is_active, description)
 VALUES ('llama3-8b-8192', 'Llama 3 8B', 'Groq', 'llm', true, 'Fast inference LLM model')
 ON CONFLICT (id) DO NOTHING;
 
@@ -53,12 +56,12 @@ CREATE TABLE global_settings (
     groq_api_key VARCHAR(255),
     maintenance_mode BOOLEAN DEFAULT FALSE,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT single_row CHECK (id = 1) 
+    CONSTRAINT single_row CHECK (id = 1)
 );
 
 -- Insert base global configuration
-INSERT INTO global_settings (id, default_llm_model, default_embedding_model) 
-VALUES (1, 'llama3-8b-8192', 'all-MiniLM-L6-v2') 
+INSERT INTO global_settings (id, default_llm_model, default_embedding_model)
+VALUES (1, 'llama3-8b-8192', 'all-MiniLM-L6-v2')
 ON CONFLICT DO NOTHING;
 
 -- Parent Table: Users (Tenants / Admins)
@@ -75,8 +78,6 @@ CREATE TABLE users (
 -- 4. CHILD TABLES CREATION (With dependencies)
 -- ==========================================
 
--- Global Tenant Config (1-to-1 with Users)
--- NOTE: UI and Chat configurations have been moved to 'user_companies'
 CREATE TABLE user_configs (
     id SERIAL PRIMARY KEY,
     user_id INTEGER UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -84,17 +85,14 @@ CREATE TABLE user_configs (
     is_active BOOLEAN DEFAULT TRUE
 );
 
--- Company-Specific Chat Configurations (1-to-Many with Users)
 CREATE TABLE user_companies (
     id SERIAL PRIMARY KEY,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    
-    -- Agnostic Platform Integration (Ready for Odoo, Shopify, etc.)
-    platform VARCHAR(50) DEFAULT 'odoo', 
-    platform_company_id VARCHAR(100) NOT NULL, -- VARCHAR supports integers (Odoo) or UUIDs
+
+    platform VARCHAR(50) DEFAULT 'odoo',
+    platform_company_id VARCHAR(100) NOT NULL,
     company_name VARCHAR(255) NOT NULL,
-    
-    -- Isolated Chatbot Configuration per Company
+
     selected_embedding_model VARCHAR(100) DEFAULT 'all-MiniLM-L6-v2' REFERENCES ai_models(id) ON DELETE SET DEFAULT,
     selected_llm_model VARCHAR(100) DEFAULT 'llama3-8b-8192' REFERENCES ai_models(id) ON DELETE SET DEFAULT,
     welcome_message TEXT DEFAULT 'Hello! How can I help you today?',
@@ -102,15 +100,15 @@ CREATE TABLE user_companies (
     theme_color VARCHAR(50) DEFAULT '#8b5cf6',
     chat_icon VARCHAR(50) DEFAULT 'Bot',
     is_active BOOLEAN DEFAULT TRUE,
-    
-    -- Prevent duplicate companies for the same tenant and platform
-    UNIQUE(user_id, platform, platform_company_id) 
+
+    UNIQUE(user_id, platform, platform_company_id)
 );
 
 -- Vector Table: Synchronized products catalog
 CREATE TABLE product_embeddings (
     variant_id INTEGER,
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    template_id INTEGER,                 -- Odoo product.template id (groups variants)
     sku VARCHAR(100),
     display_name TEXT,
     description TEXT,
@@ -129,7 +127,17 @@ CREATE TABLE product_embeddings (
     accessories TEXT,
     alternatives TEXT,
     embedding vector(384),
+    content_hash VARCHAR(64), 
+    embedding_model VARCHAR(100),
     PRIMARY KEY (variant_id, user_id)
+);
+-- An older event (e.g. a delayed retry) is discarded instead of overwriting newer data.
+CREATE TABLE product_sync_versions (
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    variant_id INTEGER NOT NULL,
+    source_ts  BIGINT  NOT NULL,         -- event_ts sent by Odoo (microseconds since epoch)
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, variant_id)
 );
 
 -- Semantic Search History (For Metrics)
@@ -142,12 +150,11 @@ CREATE TABLE search_history (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Chatbot Conversation History (Updated with tokens, latency, and company context)
 CREATE TABLE chat_history (
     id SERIAL PRIMARY KEY,
     session_id VARCHAR(100),
     user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-    company_id VARCHAR(100), -- Added to track which company generated the chat
+    company_id VARCHAR(100),
     role VARCHAR(20),
     message TEXT,
     tokens_used INTEGER DEFAULT 0,
