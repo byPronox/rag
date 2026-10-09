@@ -113,6 +113,7 @@ jobs:
     timeout-minutes: 30
     env:
       DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+      IMAGE: rag-${{ matrix.service }}:ci
     strategy:
       fail-fast: false
       matrix:
@@ -124,32 +125,55 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Log in to Docker Hub (avoids anonymous pull limits)
+      # Opcional: si Docker Hub no responde, el pipeline sigue igual
+      - name: Log in to Docker Hub (optional)
         if: env.DOCKERHUB_USERNAME != ''
+        continue-on-error: true
+        timeout-minutes: 2
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+      # Buildx descarga 'moby/buildkit' de Docker Hub; si falla, se usa el build normal
       - name: Set up Docker Buildx
+        id: buildx
+        continue-on-error: true
+        timeout-minutes: 3
         uses: docker/setup-buildx-action@v3
 
       - name: Build image (with layer cache)
+        if: steps.buildx.outcome == 'success'
         uses: docker/build-push-action@v6
         with:
           context: backend/${{ matrix.service }}
           load: true
           push: false
-          tags: rag-${{ matrix.service }}:ci
+          tags: ${{ env.IMAGE }}
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      - name: Build image (fallback without cache)
+        if: steps.buildx.outcome != 'success'
+        run: |
+          echo "::warning::Buildx unavailable (Docker Hub unreachable). Building without layer cache."
+          n=0
+          until docker build -t "$IMAGE" ./backend/${{ matrix.service }}; do
+            n=$((n+1))
+            if [ "$n" -ge 3 ]; then
+              echo "Docker build failed after $n attempts."
+              exit 1
+            fi
+            echo "Build failed (attempt $n). Retrying in $((n*20))s..."
+            sleep $((n*20))
+          done
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: rag-${{ matrix.service }}:ci
+          image-ref: ${{ env.IMAGE }}
           format: table
           exit-code: "0"
           severity: CRITICAL,HIGH
           scanners: vuln
-          ignore-unfixed: true    
+          ignore-unfixed: true
