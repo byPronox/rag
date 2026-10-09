@@ -4,6 +4,6 @@ from config.settings import Config
 
 def get_db_connection():
     """Returns a new connection to the database."""
-    conn = psycopg2.connect(Config.DATABASE_URL)
+    conn = psycopg2.connect(Config.DATABASE_URL, connect_timeout=10)
     register_vector(conn)
     return conn
