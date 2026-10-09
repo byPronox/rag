@@ -21,7 +21,7 @@ class RagOutbox(models.Model):
     last_error = fields.Char()
 
     @api.model
-    def _dedupe_key(self, payload):
+    def _rag_dedupe_key(self, payload):
         if payload.get('action') == 'sync_companies':
             return 'companies'
         if payload.get('variant_id'):
@@ -45,7 +45,7 @@ class RagOutbox(models.Model):
         outbox = self.sudo()
         tx_rows = self.env.cr.precommit.data.setdefault('rag_outbox_rows', {})
         for payload in payloads:
-            key = self._dedupe_key(payload)
+            key = self._rag_dedupe_key(payload)
             values = {
                 'payload': json.dumps(payload, default=str),
                 'action': payload.get('action'),
@@ -58,23 +58,23 @@ class RagOutbox(models.Model):
                 row = outbox.create(values)
                 if key:
                     tx_rows[key] = row.id
-        self._trigger_flush()
+        self._rag_trigger_publish()
 
     @api.model
-    def _trigger_flush(self):
+    def _rag_trigger_publish(self):
         data = self.env.cr.precommit.data
-        if data.get('rag_flush_triggered'):
+        if data.get('rag_publish_triggered'):
             return
         cron = self.env.ref('rag_sync.ir_cron_rag_outbox_flush', raise_if_not_found=False)
         if cron:
             cron.sudo()._trigger()
-            data['rag_flush_triggered'] = True
+            data['rag_publish_triggered'] = True
 
     @api.model
-    def _flush(self, limit=BATCH_SIZE):
+    def _rag_publish_batch(self, limit=BATCH_SIZE):
         """Publica un lote. Devuelve (enviados, fallidos)."""
         self.env.cr.execute(
-            "SELECT id FROM rag_outbox ORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED", (limit,))
+            "SELECT id FROM rag_outbox ORDER BY id LIMIT %s FOR UPDATE SKIP LOCKED", (int(limit),))
         ids = [row[0] for row in self.env.cr.fetchall()]
         if not ids:
             return 0, 0
@@ -91,7 +91,7 @@ class RagOutbox(models.Model):
     def _cron_flush(self):
         total = 0
         for _ in range(MAX_BATCHES_PER_RUN):
-            sent, failed = self._flush()
+            sent, failed = self._rag_publish_batch()
             self.env.cr.commit()
             total += sent
             if failed or sent < BATCH_SIZE:

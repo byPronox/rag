@@ -5,6 +5,7 @@ from odoo.tools import html2plaintext, float_compare
 
 _logger = logging.getLogger(__name__)
 
+# Campos (propios o heredados de la plantilla) que cambian lo que ve el RAG
 RAG_TRIGGER_FIELDS = {
     'name', 'default_code', 'lst_price', 'list_price', 'description_ecommerce', 'description_sale',
     'is_published', 'website_published', 'active', 'categ_id', 'taxes_id', 'company_id',
@@ -18,11 +19,43 @@ class ProductProduct(models.Model):
 
     rag_synced_qty = fields.Float(string='RAG: last synced stock', copy=False, readonly=True)
 
+    # ==========================================
+    # ENTORNO Y CONSTRUCCIÓN SEGURA DE PAYLOADS
+    # ==========================================
+    def _rag_system_env(self):
+        """Permisos de sistema + todas las compañías permitidas (la compañía actual primero).
+        El payload NO debe depender de los permisos del usuario que guarda ni del usuario del cron."""
+        current = self.env.company
+        others = self.env['res.company'].sudo().search([('id', '!=', current.id)])
+        return self.sudo().with_context(allowed_company_ids=[current.id] + others.ids)
+
+    def _rag_safe_payloads(self, builder):
+        """Arma payloads producto por producto. Si uno falla, se registra y se omite:
+        la sincronización con el RAG nunca debe bloquear el guardado en Odoo."""
+        payloads = []
+        for product in self._rag_system_env():
+            try:
+                payloads.append(builder(product))
+            except Exception:  # pylint: disable=broad-except
+                _logger.exception("RAG: could not prepare payload for product id=%s (skipped).", product.id)
+        return payloads
+
     def _rag_base_url(self):
         ICP = self.env['ir.config_parameter'].sudo()
         base_url = ICP.get_param('rag_rabbitmq_sync.public_base_url') or ICP.get_param('web.base.url') or ''
         return base_url.rstrip('/')
 
+    def _rag_variant_name(self):  # NUEVO
+        """'Arnés para perro (Rojo, M)' armado sin leer product.attribute.
+        display_name sí lo lee y provocaba AccessError en algunos productos."""
+        self.ensure_one()
+        base = self.product_tmpl_id.name or self.name or ''
+        values = self.product_template_attribute_value_ids.mapped('name')
+        return f"{base} ({', '.join(values)})" if values else base
+
+    # ==========================================
+    # PAYLOADS
+    # ==========================================
     def _prepare_rag_delete_payload(self):
         self.ensure_one()
         return {
@@ -38,8 +71,9 @@ class ProductProduct(models.Model):
         base_url = self._rag_base_url()
         company = self.company_id
 
-        accessories = self.accessory_product_ids.mapped('display_name')
-        alternatives = self.alternative_product_ids.mapped('display_name')
+        # CAMBIO: nombres armados sin display_name (evita leer product.attribute)
+        accessories = [p._rag_variant_name() for p in self.accessory_product_ids]
+        alternatives = [p._rag_variant_name() for p in self.alternative_product_ids]
 
         if self.image_variant_1920:
             img_128 = f"{base_url}/web/image/product.product/{self.id}/image_variant_128"
@@ -55,8 +89,9 @@ class ProductProduct(models.Model):
             self.description_ecommerce or self.description_sale or self.name or '').strip()
         category_name = self.categ_id.name if self.categ_id else "Uncategorized"
 
+        # --- Precios e impuestos (solo impuestos de la compañía del producto) ---
         currency = self.currency_id
-        base_price = round(self.lst_price, 2)
+        base_price = round(self.lst_price, 2)  # lst_price ya incluye el precio extra de la variante
         tax_company = company or self.env.company
         taxes = self.taxes_id.filtered(lambda t: t.company_id == tax_company)
         if taxes:
@@ -74,7 +109,7 @@ class ProductProduct(models.Model):
             'variant_id': self.id,
             'template_id': self.product_tmpl_id.id,
             'sku': self.default_code,
-            'display_name': self.display_name,
+            'display_name': self._rag_variant_name(),  # CAMBIO
             'company_id': str(company.id) if company else 'global',
             'company_name': company.name if company else 'All Companies',
             'description': clean_description,
@@ -93,25 +128,30 @@ class ProductProduct(models.Model):
             'tax_percent': tax_percent,
         }
 
+    # ==========================================
+    # SINCRONIZACIÓN
+    # ==========================================
     def _rag_sync_after_write(self, vals):
+        """Usado por product.product y product.template después de un write."""
         if self.env.context.get('rag_skip_sync'):
             return
         changed = set(vals)
         if not RAG_TRIGGER_FIELDS & changed:
             return
-        products = self.exists()
+        products = self.sudo().exists()
         visible = products.filtered(lambda p: p.active and p.is_published)
-        payloads = [p._prepare_rag_payload('update') for p in visible]
+        payloads = visible._rag_safe_payloads(lambda p: p._prepare_rag_payload('update'))
+        # Si lo despublicaron o archivaron, se borra del índice vectorial
         if VISIBILITY_FIELDS & changed:
-            payloads += [p._prepare_rag_delete_payload() for p in (products - visible)]
+            payloads += (products - visible)._rag_safe_payloads(lambda p: p._prepare_rag_delete_payload())
         self.env['rag.outbox'].enqueue(payloads)
 
     @api.model_create_multi
     def create(self, vals_list):
         records = super().create(vals_list)
         if not self.env.context.get('rag_skip_sync'):
-            published = records.filtered(lambda p: p.active and p.is_published)
-            self.env['rag.outbox'].enqueue([p._prepare_rag_payload('create') for p in published])
+            published = records.sudo().filtered(lambda p: p.active and p.is_published)
+            self.env['rag.outbox'].enqueue(published._rag_safe_payloads(lambda p: p._prepare_rag_payload('create')))
         return records
 
     def write(self, vals):
@@ -120,34 +160,42 @@ class ProductProduct(models.Model):
         return result
 
     def unlink(self):
-        payloads = [p._prepare_rag_delete_payload() for p in self]
+        payloads = self._rag_safe_payloads(lambda p: p._prepare_rag_delete_payload())
         result = super().unlink()
-        self.env['rag.outbox'].enqueue(payloads) 
+        self.env['rag.outbox'].enqueue(payloads)
         return result
 
     def action_massive_sync_rag(self):
-        published = self.filtered(lambda p: p.active and p.is_published)
-        self.env['rag.outbox'].enqueue([p._prepare_rag_payload('sync') for p in published])
+        published = self.sudo().filtered(lambda p: p.active and p.is_published)
+        payloads = published._rag_safe_payloads(lambda p: p._prepare_rag_payload('sync'))
+        self.env['rag.outbox'].enqueue(payloads)
+        skipped = len(published) - len(payloads)
+        message = f'{len(payloads)} product(s) queued for the AI. They will be sent in a few seconds.'
+        if skipped:
+            message += f' {skipped} product(s) skipped due to errors (see server log).'
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
                 'title': 'RAG Sync Queued',
-                'message': (f'{len(published)} product(s) queued for the AI. They will be sent in a few '
-                            'seconds. Pending messages: Settings > Technical > RAG Outbox.'),
-                'type': 'success',
+                'message': message,
+                'type': 'warning' if skipped else 'success',
                 'sticky': False,
             }
         }
 
     @api.model
     def _cron_rag_sync_stock(self):
-        products = self.sudo().search([('is_published', '=', True)])
+        """El stock (qty_available) es calculado y nunca llega en write(): se revisa periódicamente."""
+        products = self._rag_system_env().search([('is_published', '=', True)])
         changed = products.filtered(
             lambda p: float_compare(p.qty_available, p.rag_synced_qty, precision_digits=2) != 0)
         if not changed:
             return
-        self.env['rag.outbox'].enqueue([p._prepare_rag_payload('update') for p in changed])
-        for product in changed:
+        payloads = changed._rag_safe_payloads(lambda p: p._prepare_rag_payload('update'))
+        self.env['rag.outbox'].enqueue(payloads)
+        queued_ids = {p['variant_id'] for p in payloads}
+        for product in changed.filtered(lambda p: p.id in queued_ids):
             product.with_context(rag_skip_sync=True).write({'rag_synced_qty': product.qty_available})
-        _logger.info("RAG stock sync: %d product(s) with stock changes queued.", len(changed))
+        _logger.info("RAG stock sync: %d product(s) queued, %d skipped.",
+                     len(payloads), len(changed) - len(payloads))

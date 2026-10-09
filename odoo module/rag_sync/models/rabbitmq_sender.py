@@ -32,18 +32,19 @@ class RabbitMQSender(models.AbstractModel):
             params.connection_attempts = 1
             connection = pika.BlockingConnection(params)
             channel = connection.channel()
-            channel.confirm_delivery()
-
+            channel.tx_select()
+            keys = []
             for key, body in items:
                 channel.basic_publish(
                     exchange='',
                     routing_key=queue_name,
                     body=body,
                     properties=pika.BasicProperties(delivery_mode=2, content_type='application/json'),
-                    mandatory=True,
                 )
-                sent.append(key)
-            return sent, None
+                keys.append(key)
+            channel.tx_commit()  
+            return keys, None
+            
         except Exception as e:
             _logger.error("RabbitMQ publish error after %d message(s): %s", len(sent), e)
             return sent, str(e)
