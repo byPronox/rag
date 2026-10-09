@@ -53,6 +53,16 @@ class ProductProduct(models.Model):
         values = self.product_template_attribute_value_ids.mapped('name')
         return f"{base} ({', '.join(values)})" if values else base
 
+    def _rag_names(self, records):
+        """Nombres legibles para accesorios (product.product) y alternativas (product.template)."""
+        names = []
+        for rec in records:
+            if rec._name == 'product.product':
+                names.append(rec._rag_variant_name())
+            else:
+                names.append(rec.name or '')
+        return [n for n in names if n]
+
     # ==========================================
     # PAYLOADS
     # ==========================================
@@ -72,8 +82,8 @@ class ProductProduct(models.Model):
         company = self.company_id
 
         # CAMBIO: nombres armados sin display_name (evita leer product.attribute)
-        accessories = [p._rag_variant_name() for p in self.accessory_product_ids]
-        alternatives = [p._rag_variant_name() for p in self.alternative_product_ids]
+        accessories = self._rag_names(self.accessory_product_ids)
+        alternatives = self._rag_names(self.alternative_product_ids)
 
         if self.image_variant_1920:
             img_128 = f"{base_url}/web/image/product.product/{self.id}/image_variant_128"
