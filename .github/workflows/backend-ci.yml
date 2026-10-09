@@ -6,143 +6,150 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
+  pull_request:
+    branches: [ "main" ]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
   workflow_dispatch:
 
 concurrency:
   group: backend-ci-${{ github.ref }}
   cancel-in-progress: true
+
 jobs:
   # ----------------------------------------------------
-  # NODO 1: Calidad de Código y Seguridad (Flake8, Pylint, Bandit)
+  # NODO 1: Calidad, Seguridad estática y Pruebas
+  # (una sola instalación de dependencias por microservicio)
   # ----------------------------------------------------
-  code-quality:
-    name: Code Quality & Security
+  quality-and-tests:
+    name: Quality & Tests (${{ matrix.service }})
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
+      fail-fast: false
       matrix:
-        microservice: 
-          - backend/microservice_1_sync
-          - backend/microservice_2_core
-          - backend/microservice_3_rag
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
-        cache: 'pip'
-
-    - name: Install dependencies
-      run: |
-        cd ${{ matrix.microservice }}
-        python -m pip install --upgrade pip
-        pip install flake8 pylint bandit
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-    - name: Capstone - Critical Syntax Check
-      run: |
-        cd ${{ matrix.microservice }}
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-
-    - name: Checkstyle Equivalent (Flake8 Full Report)
-      run: |
-        cd ${{ matrix.microservice }}
-        flake8 . --output-file=flake8-report.txt --exit-zero
-
-    - name: PMD Equivalent (Pylint Static Analysis)
-      run: |
-        cd ${{ matrix.microservice }}
-        find . -type f -name "*.py" | xargs pylint --output-format=text > pylint-report.txt || true
-
-    - name: Security Static Analysis (Bandit)
-      run: |
-        cd ${{ matrix.microservice }}
-        # Escanea vulnerabilidades de seguridad y genera reporte
-        bandit -r . -f txt -o bandit-report.txt || true
-
-    - name: Upload QA & Security Reports
-      uses: actions/upload-artifact@v4
-      with:
-        name: qa-reports-${{ strategy.job-index }}
-        path: |
-          ${{ matrix.microservice }}/flake8-report.txt
-          ${{ matrix.microservice }}/pylint-report.txt
-          ${{ matrix.microservice }}/bandit-report.txt
-
-  # ----------------------------------------------------
-  # NODO 2: Pruebas (Pytest y Cobertura)
-  # ----------------------------------------------------
-  testing:
-    name: Unit Testing & Coverage
-    needs: code-quality
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        microservice: 
-          - backend/microservice_1_sync
-          - backend/microservice_2_core
-          - backend/microservice_3_rag
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
-    - name: Set up Python 3.12
-      uses: actions/setup-python@v5
-      with:
-        python-version: "3.12"
-        cache: 'pip'
-
-    - name: Install dependencies
-      run: |
-        cd ${{ matrix.microservice }}
-        python -m pip install --upgrade pip
-        pip install pytest httpx pytest-cov
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-    - name: JaCoCo Equivalent (Pytest + Coverage)
-      env:
-        DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy_db"
-        GROQ_API_KEY: "dummy_key_solo_para_tests"
-        SECRET_KEY: "dummy_secret_jwt_para_tests"
-      run: |
-        cd ${{ matrix.microservice }}
-        # Forzamos que falle el Action si la cobertura baja del 80%
-        pytest --cov=. --cov-report=xml:coverage.xml --cov-fail-under=80
-
-    - name: Upload Coverage Report
-      uses: actions/upload-artifact@v4
-      with:
-        name: coverage-reports-${{ strategy.job-index }}
-        path: ${{ matrix.microservice }}/coverage.xml
-
-  # ----------------------------------------------------
-  # NODO 3: Escáner de Vulnerabilidades de Artefactos (Trivy)
-  # ----------------------------------------------------
-  security-container:
-    name: Container Security Scan (Trivy)
-    needs: testing
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        microservice: 
-          - backend/microservice_1_sync
-          - backend/microservice_2_core
-          - backend/microservice_3_rag
+        include:
+          - service: microservice_1_sync
+            ml: true
+          - service: microservice_2_core
+            ml: false
+          - service: microservice_3_rag
+            ml: true
+    defaults:
+      run:
+        working-directory: backend/${{ matrix.service }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Build Docker Image
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          # Caché separado por microservicio (antes los 3 compartían la misma clave)
+          cache-dependency-path: backend/${{ matrix.service }}/requirements.txt
+
+      - name: Cache Hugging Face models
+        if: matrix.ml
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ matrix.service }}-v1
+
+      - name: Install dependencies
         run: |
-          # Se asume que hay un Dockerfile en la carpeta de cada microservicio
-          docker build -t local-image-${{ strategy.job-index }}:latest ./${{ matrix.microservice }}
+          python -m pip install --upgrade pip
+          pip install flake8 pylint bandit pytest httpx pytest-cov
+          if [ "${{ matrix.ml }}" = "true" ]; then
+            # torch solo CPU (~200 MB) en lugar de la versión con CUDA (varios GB)
+            pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+          else
+            pip install -r requirements.txt
+          fi
+
+      - name: Capstone - Critical Syntax Check
+        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Checkstyle Equivalent (Flake8 Full Report)
+        run: flake8 . --output-file=flake8-report.txt --exit-zero
+
+      - name: PMD Equivalent (Pylint Static Analysis)
+        run: find . -type f -name "*.py" | xargs pylint --output-format=text > pylint-report.txt || true
+
+      - name: Security Static Analysis (Bandit)
+        # Se excluyen los tests: 'assert' en pytest genera falsos positivos (B101)
+        run: bandit -r . -x ./tests -f txt -o bandit-report.txt || true
+
+      - name: JaCoCo Equivalent (Pytest + Coverage)
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy_db"
+          GROQ_API_KEY: "dummy_key_solo_para_tests"
+          SECRET_KEY: "dummy_secret_jwt_para_tests"
+        run: pytest --cov=. --cov-report=xml:coverage.xml --cov-fail-under=80
+
+      - name: Upload QA, Security & Coverage Reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports-${{ matrix.service }}
+          if-no-files-found: ignore
+          path: |
+            backend/${{ matrix.service }}/flake8-report.txt
+            backend/${{ matrix.service }}/pylint-report.txt
+            backend/${{ matrix.service }}/bandit-report.txt
+            backend/${{ matrix.service }}/coverage.xml
+
+  # ----------------------------------------------------
+  # NODO 2: Build de la imagen + Escáner de vulnerabilidades (Trivy)
+  # Solo en main (push / manual), no en cada Pull Request
+  # ----------------------------------------------------
+  docker-scan:
+    name: Docker Build & Trivy (${{ matrix.service }})
+    needs: quality-and-tests
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - microservice_1_sync
+          - microservice_2_core
+          - microservice_3_rag
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub (avoids anonymous pull limits)
+        if: env.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (with layer cache)
+        uses: docker/build-push-action@v6
+        with:
+          context: backend/${{ matrix.service }}
+          load: true
+          push: false
+          tags: rag-${{ matrix.service }}:ci
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: 'local-image-${{ strategy.job-index }}:latest'
-          format: 'table'
-          exit-code: '0'
-          severity: 'CRITICAL,HIGH'
+          image-ref: rag-${{ matrix.service }}:ci
+          format: table
+          exit-code: "0"
+          severity: CRITICAL,HIGH
+          scanners: vuln
+          ignore-unfixed: true    
