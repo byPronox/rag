@@ -1,9 +1,7 @@
 import logging
 import time
-
 import pika
 from pika.exceptions import AMQPConnectionError
-
 from config.settings import Config
 
 log = logging.getLogger("sync.rabbitmq")

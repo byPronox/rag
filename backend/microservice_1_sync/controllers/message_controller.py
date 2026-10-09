@@ -1,127 +1,290 @@
+import hashlib
+import ipaddress
 import json
-import requests
+import logging
 import re
+import socket
+from urllib.parse import urlparse
+import pika
+import requests
+from config.settings import Config
 from database.connection import get_db_connection
 from services.embedding_service import embedding_service
+
+log = logging.getLogger("sync.worker")
+
+VALID_PRODUCT_ACTIONS = ("create", "update", "sync")
+
+
+class PermanentError(Exception):
+    """Error que no se soluciona reintentando el mensaje."""
+
+
+# ---------------------------------------------------------------------------
+# Utilidades
+# ---------------------------------------------------------------------------
+def clean_display_name(raw_name):
+    """'[SKU1] Producto' -> 'Producto'"""
+    return re.sub(r'^\[.*?\]\s*', '', raw_name or '')
+
+
+def strip_html(text):
+    text = re.sub(r"<[^>]+>", " ", text or "")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def build_embedding_text(data, clean_name):
+    """Texto que se convierte en vector. v1 = formato original (no cambiar: hay test de regresión)."""
+    if Config.EMBED_TEXT_VERSION == "v2":
+        parts = [
+            f"Product: {clean_name}.",
+            f"Category: {data.get('category') or ''}.",
+            f"Description: {strip_html(data.get('description'))}.",
+        ]
+        if data.get('accessories'):
+            parts.append(f"Accessories for this product: {data['accessories']}.")
+        if data.get('alternatives'):
+            parts.append(f"Alternative products: {data['alternatives']}.")
+        return " ".join(parts)
+
+    return (
+        f"Company: {data.get('company_name', '')}. "
+        f"Product: {clean_name}. Category: {data.get('category', '')}. "
+        f"Price: {data.get('price_included', 0)} {data.get('currency', 'USD')} (Final price including {data.get('tax_percent', 0)}% tax). "
+        f"Base price without tax is {data.get('price_excluded', 0)} {data.get('currency', 'USD')}. "
+        f"Description: {data.get('description', '')}. "
+        f"Accessories for this product: {data.get('accessories', 'None')}. "
+        f"Alternative products: {data.get('alternatives', 'None')}."
+    )
+
+
+def is_safe_webhook_url(url):
+    """Evita SSRF: solo http(s) y, en producción, nunca IPs privadas/loopback/link-local."""
+    if not url:
+        return False
+    try:
+        parsed = urlparse(url)
+    except ValueError:
+        return False
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        return False
+    if Config.ALLOW_PRIVATE_WEBHOOKS:
+        return True
+    try:
+        port = parsed.port or (443 if parsed.scheme == "https" else 80)
+        infos = socket.getaddrinfo(parsed.hostname, port)
+    except (socket.gaierror, ValueError):
+        return False
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0].split("%")[0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+            return False
+    return True
+
 
 def send_feedback_to_odoo(webhook_url, variant_id, error_message):
     if not webhook_url:
         return
+    if not is_safe_webhook_url(webhook_url):
+        log.warning("Webhook URL rejected (unsafe): %s", webhook_url)
+        return
     try:
         payload = {"variant_id": variant_id, "error": error_message}
         response = requests.post(webhook_url, json=payload, timeout=5)
-        print(f"Sent error feedback to Odoo. Status: {response.status_code}")
+        log.info("Sent error feedback to Odoo. Status: %s", response.status_code)
     except Exception as e:
-        print(f"Could not reach Odoo Webhook: {e}")
+        log.warning("Could not reach Odoo webhook: %s", e)
+
+
+def get_retry_count(properties):
+    headers = (properties.headers or {}) if properties else {}
+    return int(headers.get("x-retry-count", 0))
+
+
+def republish(ch, queue, body, properties, extra_headers):
+    headers = dict((properties.headers or {}) if properties else {})
+    headers.update(extra_headers)
+    ch.basic_publish(
+        exchange="",
+        routing_key=queue,
+        body=body,
+        properties=pika.BasicProperties(delivery_mode=2, content_type="application/json", headers=headers),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Lógica de negocio
+# ---------------------------------------------------------------------------
+def _sync_companies(cur, user_id, data):
+    companies_data = data.get('companies', [])
+    for comp in companies_data:
+        cur.execute("""
+            INSERT INTO user_companies (user_id, platform, platform_company_id, company_name)
+            VALUES (%s, 'odoo', %s, %s)
+            ON CONFLICT (user_id, platform, platform_company_id)
+            DO UPDATE SET company_name = EXCLUDED.company_name;
+        """, (user_id, str(comp['id']), comp['name']))
+    log.info("Handshake complete. Tenant %s synced %d companies.", user_id, len(companies_data))
+
+
+def _upsert_product(cur, user_id, data):
+    variant_id = data.get('variant_id')
+    company_id = str(data.get('company_id'))
+
+    cur.execute("""
+        SELECT 1 FROM user_companies
+        WHERE user_id = %s AND platform_company_id = %s AND is_active = TRUE
+    """, (user_id, company_id))
+    if not cur.fetchone():
+        raise PermanentError(
+            f"Company {company_id} is not registered for this tenant. Run the company handshake first.")
+
+    clean_name = clean_display_name(data.get('display_name', ''))
+    if not clean_name:
+        raise PermanentError("display_name is empty")
+
+    text_to_embed = build_embedding_text(data, clean_name)
+    content_hash = hashlib.sha256(text_to_embed.encode("utf-8")).hexdigest()
+
+    structured = (
+        data.get('sku'), clean_name, data.get('description'),
+        data.get('price_excluded'), data.get('price_included'), data.get('tax_percent'), data.get('currency'),
+        data.get('stock'), data.get('category'), data.get('website_url'),
+        data.get('image_128_url'), data.get('image_512_url'), data.get('image_1920_url'),
+        company_id, data.get('company_name'),
+        data.get('accessories', ''), data.get('alternatives', ''),
+    )
+
+    cur.execute("SELECT content_hash FROM product_embeddings WHERE variant_id = %s AND user_id = %s",
+                (variant_id, user_id))
+    existing = cur.fetchone()
+
+    if existing and existing[0] == content_hash:
+        cur.execute("""
+            UPDATE product_embeddings SET
+                sku = %s, display_name = %s, description = %s,
+                price_excluded = %s, price_included = %s, tax_percent = %s, currency = %s,
+                stock = %s, category = %s, website_url = %s,
+                image_128_url = %s, image_512_url = %s, image_1920_url = %s,
+                company_id = %s, company_name = %s, accessories = %s, alternatives = %s
+            WHERE variant_id = %s AND user_id = %s
+        """, (*structured, variant_id, user_id))
+        log.info("Variant %s updated (embedding reused, text unchanged).", variant_id)
+        return
+
+    vector = embedding_service.generate_vector(text_to_embed)
+    cur.execute("""
+        INSERT INTO product_embeddings (
+            variant_id, user_id, sku, display_name, description,
+            price_excluded, price_included, tax_percent, currency,
+            stock, category, website_url, image_128_url, image_512_url, image_1920_url,
+            company_id, company_name, accessories, alternatives, embedding, content_hash
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (variant_id, user_id) DO UPDATE SET
+            sku = EXCLUDED.sku,
+            display_name = EXCLUDED.display_name,
+            description = EXCLUDED.description,
+            price_excluded = EXCLUDED.price_excluded,
+            price_included = EXCLUDED.price_included,
+            tax_percent = EXCLUDED.tax_percent,
+            currency = EXCLUDED.currency,
+            stock = EXCLUDED.stock,
+            category = EXCLUDED.category,
+            website_url = EXCLUDED.website_url,
+            image_128_url = EXCLUDED.image_128_url,
+            image_512_url = EXCLUDED.image_512_url,
+            image_1920_url = EXCLUDED.image_1920_url,
+            company_id = EXCLUDED.company_id,
+            company_name = EXCLUDED.company_name,
+            accessories = EXCLUDED.accessories,
+            alternatives = EXCLUDED.alternatives,
+            embedding = EXCLUDED.embedding,
+            content_hash = EXCLUDED.content_hash;
+    """, (variant_id, user_id, *structured, vector, content_hash))
+    log.info("Variant %s embedded and saved securely.", variant_id)
+
+
+def _handle(cur, data):
+    api_key = data.get('api_key')
+    action = data.get('action')
+
+    if not api_key:
+        raise PermanentError(f"Missing API Key for action {action}.")
+
+    cur.execute("SELECT user_id FROM user_configs WHERE system_api_key = %s AND is_active = TRUE", (api_key,))
+    user = cur.fetchone()
+    if not user:
+        raise PermanentError(f"Invalid or missing API Key for action {action}.")
+    user_id = user[0]
+    log.info("Processing '%s' (Tenant ID: %s)...", action, user_id)
+
+    if action == 'sync_companies':
+        _sync_companies(cur, user_id, data)
+        return
+
+    if action not in VALID_PRODUCT_ACTIONS and action != 'delete':
+        raise PermanentError(f"Unknown action '{action}'.")
+
+    variant_id = data.get('variant_id')
+    if variant_id is None:
+        raise PermanentError("variant_id is required.")
+
+    if action == 'delete':
+        cur.execute("DELETE FROM product_embeddings WHERE variant_id = %s AND user_id = %s", (variant_id, user_id))
+        log.info("Variant %s deleted securely.", variant_id)
+        return
+
+    _upsert_product(cur, user_id, data)
+
 
 def process_product_message(ch, method, properties, body):
-    conn = get_db_connection()
-    
+    conn = None
     variant_id = None
     webhook_url = None
-    
+
     try:
-        data = json.loads(body)
-        
-        api_key = data.get('api_key')
-        action = data.get('action')
+        try:
+            data = json.loads(body)
+        except (TypeError, ValueError) as e:
+            raise PermanentError(f"Malformed JSON: {e}") from e
+        if not isinstance(data, dict):
+            raise PermanentError("Payload must be a JSON object.")
+
         variant_id = data.get('variant_id')
         webhook_url = data.get('webhook_url')
-        
+
+        conn = get_db_connection()
         with conn.cursor() as cur:
-            cur.execute("SELECT user_id FROM user_configs WHERE system_api_key = %s AND is_active = TRUE", (api_key,))
-            user = cur.fetchone()
-            
-            if not user:
-                error_msg = f"Invalid or missing API Key for action {action}."
-                print(f"[AUTH FAILED] {error_msg}")
-                send_feedback_to_odoo(webhook_url, variant_id, error_msg)
-                ch.basic_ack(delivery_tag=method.delivery_tag)
-                return
-            
-            user_id = user[0]
-            print(f"Processing '{action}' (Tenant ID: {user_id})...")
-
-            if action == 'sync_companies':
-                companies_data = data.get('companies', [])
-                for comp in companies_data:
-                    cur.execute("""
-                        INSERT INTO user_companies (user_id, platform, platform_company_id, company_name)
-                        VALUES (%s, 'odoo', %s, %s)
-                        ON CONFLICT (user_id, platform, platform_company_id) 
-                        DO UPDATE SET company_name = EXCLUDED.company_name;
-                    """, (user_id, str(comp['id']), comp['name']))
-                
-                print(f"[SUCCESS] Handshake complete. Synced {len(companies_data)} companies.")
-            
-            elif action in ['create', 'update', 'sync']:
-                raw_display_name = data.get('display_name', '')
-                clean_name = re.sub(r'^\[.*?\]\s*', '', raw_display_name)
-
-                text_to_embed = (
-                    f"Company: {data.get('company_name', '')}. "
-                    f"Product: {clean_name}. Category: {data.get('category', '')}. "
-                    f"Price: {data.get('price_included', 0)} {data.get('currency', 'USD')} (Final price including {data.get('tax_percent', 0)}% tax). "
-                    f"Base price without tax is {data.get('price_excluded', 0)} {data.get('currency', 'USD')}. "
-                    f"Description: {data.get('description', '')}. "
-                    f"Accessories for this product: {data.get('accessories', 'None')}. "
-                    f"Alternative products: {data.get('alternatives', 'None')}."
-                )
-                
-                vector = embedding_service.generate_vector(text_to_embed)
-                
-                cur.execute("""
-                    INSERT INTO product_embeddings (
-                        variant_id, user_id, sku, display_name, description, 
-                        price_excluded, price_included, tax_percent, currency, 
-                        stock, category, website_url, image_128_url, image_512_url, image_1920_url, 
-                        company_id, company_name, accessories, alternatives, embedding
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (variant_id, user_id) DO UPDATE SET
-                        sku = EXCLUDED.sku,
-                        display_name = EXCLUDED.display_name,
-                        description = EXCLUDED.description,
-                        price_excluded = EXCLUDED.price_excluded,
-                        price_included = EXCLUDED.price_included,
-                        tax_percent = EXCLUDED.tax_percent,
-                        currency = EXCLUDED.currency,
-                        stock = EXCLUDED.stock,
-                        category = EXCLUDED.category,
-                        website_url = EXCLUDED.website_url,
-                        image_128_url = EXCLUDED.image_128_url,
-                        image_512_url = EXCLUDED.image_512_url,
-                        image_1920_url = EXCLUDED.image_1920_url,
-                        company_id = EXCLUDED.company_id,
-                        company_name = EXCLUDED.company_name,
-                        accessories = EXCLUDED.accessories,
-                        alternatives = EXCLUDED.alternatives,
-                        embedding = EXCLUDED.embedding;
-                """, (
-                    variant_id, user_id, data.get('sku'), clean_name, data.get('description'), 
-                    data.get('price_excluded'), data.get('price_included'), data.get('tax_percent'), data.get('currency'),
-                    data.get('stock'), data.get('category'), data.get('website_url'), 
-                    data.get('image_128_url'), data.get('image_512_url'), data.get('image_1920_url'), 
-                    str(data.get('company_id')), data.get('company_name'), # company_id como string
-                    data.get('accessories', ''), data.get('alternatives', ''), vector
-                ))
-                print(f"[SUCCESS] Variant {variant_id} embedded and saved securely.")
-            
-            # --- LÓGICA 3: ELIMINACIÓN ---
-            elif action == 'delete':
-                cur.execute("DELETE FROM product_embeddings WHERE variant_id = %s AND user_id = %s", (variant_id, user_id))
-                print(f"[SUCCESS] Variant {variant_id} deleted securely.")
-        
+            _handle(cur, data)
         conn.commit()
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
+    except PermanentError as e:
+        if conn:
+            conn.rollback()
+        log.error("[PARKING] variant=%s: %s", variant_id, e)
+        republish(ch, Config.PARKING_QUEUE_NAME, body, properties, {"x-error": str(e)[:500]})
+        send_feedback_to_odoo(webhook_url, variant_id, str(e))
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+
     except Exception as e:
-        error_msg = f"Database or processing failure: {str(e)}"
-        print(f"[ERROR] {error_msg}")
-        conn.rollback()
-        send_feedback_to_odoo(webhook_url, variant_id, error_msg)
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-    
+        if conn:
+            conn.rollback()
+        attempts = get_retry_count(properties)
+        error_msg = f"Database or processing failure: {e}"
+        if attempts >= Config.MAX_RETRIES:
+            log.error("[PARKING] variant=%s failed after %d retries: %s", variant_id, attempts, e)
+            republish(ch, Config.PARKING_QUEUE_NAME, body, properties, {"x-error": error_msg[:500]})
+            send_feedback_to_odoo(webhook_url, variant_id, error_msg)
+        else:
+            log.warning("[RETRY %d/%d] variant=%s: %s", attempts + 1, Config.MAX_RETRIES, variant_id, e)
+            republish(ch, Config.RETRY_QUEUE_NAME, body, properties,
+                      {"x-retry-count": attempts + 1, "x-error": error_msg[:500]})
+        ch.basic_ack(delivery_tag=method.delivery_tag)
+
     finally:
         if conn:
             conn.close()
