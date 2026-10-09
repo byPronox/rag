@@ -3,9 +3,14 @@ name: Backend CI Pipeline
 on:
   push:
     branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-ci.yml"
+  workflow_dispatch:
 
+concurrency:
+  group: backend-ci-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   # ----------------------------------------------------
   # NODO 1: Calidad de Código y Seguridad (Flake8, Pylint, Bandit)
