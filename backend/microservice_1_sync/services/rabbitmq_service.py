@@ -1,7 +1,7 @@
 import logging
 import time
 import pika
-from pika.exceptions import AMQPConnectionError
+from pika.exceptions import AMQPError
 from config.settings import Config
 
 log = logging.getLogger("sync.rabbitmq")
@@ -22,8 +22,16 @@ def declare_topology(channel):
     channel.queue_declare(queue=Config.PARKING_QUEUE_NAME, durable=True)
 
 
+def _close_quietly(connection):
+    if connection is not None and connection.is_open:
+        try:
+            connection.close()
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+
 def start_worker(max_connection_attempts=None):
-    """Arranca el consumidor y se reconecta con backoff exponencial si RabbitMQ se cae."""
+    """Arranca el consumidor y se reconecta con backoff exponencial ante cualquier error de RabbitMQ."""
     from controllers.message_controller import process_product_message
 
     attempt = 0
@@ -32,6 +40,8 @@ def start_worker(max_connection_attempts=None):
         try:
             connection = pika.BlockingConnection(pika.URLParameters(Config.RABBITMQ_URL))
             channel = connection.channel()
+            # El reenvío a retry/parking queda confirmado por RabbitMQ antes de hacer ack del original
+            channel.confirm_delivery()
             declare_topology(channel)
             channel.basic_qos(prefetch_count=Config.PREFETCH_COUNT)
             channel.basic_consume(queue=Config.QUEUE_NAME, on_message_callback=process_product_message)
@@ -43,15 +53,16 @@ def start_worker(max_connection_attempts=None):
 
         except (KeyboardInterrupt, SystemExit):
             log.info("Shutdown signal received, closing RabbitMQ connection...")
-            if connection is not None and connection.is_open:
-                connection.close()
+            _close_quietly(connection)
             break
 
-        except AMQPConnectionError as e:
+        except AMQPError as e:
             attempt += 1
+            _close_quietly(connection)
             if max_connection_attempts and attempt >= max_connection_attempts:
                 log.error("Could not connect to RabbitMQ after %d attempts", attempt)
                 raise
             delay = min(30, 2 ** attempt)
-            log.warning("RabbitMQ unavailable (%s). Retrying in %ss (attempt %d)", e, delay, attempt)
+            log.warning("RabbitMQ error (%s: %s). Reconnecting in %ss (attempt %d)",
+                        type(e).__name__, e, delay, attempt)
             time.sleep(delay)

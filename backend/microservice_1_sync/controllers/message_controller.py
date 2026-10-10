@@ -9,15 +9,15 @@ import time
 from urllib.parse import urlparse
 
 import pika
+import psycopg2
 import requests
 
 from config.settings import Config
-from database.connection import get_db_connection
+from database.connection import get_db_connection, reset_db_connection
+from schemas.payloads import PayloadError, validate_payload
 from services.embedding_service import embedding_service
 
 log = logging.getLogger("sync.worker")
-
-VALID_PRODUCT_ACTIONS = ("create", "update", "sync")
 
 GLOBAL_COMPANY_ID = "global"
 _LEGACY_NO_COMPANY = {"", "False", "None", "false", "none"}
@@ -121,8 +121,55 @@ def is_safe_webhook_url(url):
     return True
 
 
+# ---------------------------------------------------------------------------
+# Webhook a Odoo: deduplicación + circuit breaker
+# ---------------------------------------------------------------------------
+_feedback_sent_at = {}
+_webhook_breaker = {}
+
+
+def _should_send_feedback(webhook_url, error_message):
+    """Un error de API key afecta a TODOS los mensajes del tenant: se avisa a Odoo una sola vez
+    cada FEEDBACK_DEDUPE_SECONDS en lugar de una vez por producto. Los demás errores se envían siempre."""
+    if "API Key" not in (error_message or ""):
+        return True
+    key = (webhook_url, "invalid_api_key")
+    now = time.monotonic()
+    last = _feedback_sent_at.get(key)
+    if last is not None and now - last < Config.FEEDBACK_DEDUPE_SECONDS:
+        return False
+    _feedback_sent_at[key] = now
+    return True
+
+
+def _breaker_is_open(webhook_url):
+    _failures, open_until = _webhook_breaker.get(webhook_url, (0, 0.0))
+    return time.monotonic() < open_until
+
+
+def _breaker_record(webhook_url, success):
+    """Tras WEBHOOK_BREAKER_THRESHOLD fallos seguidos, se deja de llamar a ese Odoo por
+    WEBHOOK_BREAKER_SECONDS: un Odoo caído no frena la cola."""
+    if success:
+        _webhook_breaker.pop(webhook_url, None)
+        return
+    failures = _webhook_breaker.get(webhook_url, (0, 0.0))[0] + 1
+    open_until = 0.0
+    if failures >= Config.WEBHOOK_BREAKER_THRESHOLD:
+        open_until = time.monotonic() + Config.WEBHOOK_BREAKER_SECONDS
+        log.warning("Odoo webhook failed %d times in a row: pausing feedback for %ss.",
+                    failures, Config.WEBHOOK_BREAKER_SECONDS)
+    _webhook_breaker[webhook_url] = (failures, open_until)
+
+
 def send_feedback_to_odoo(webhook_url, variant_id, error_message, api_key=None):
     if not webhook_url:
+        return
+    if _breaker_is_open(webhook_url):
+        log.info("Feedback to Odoo skipped: webhook unreachable recently (circuit open).")
+        return
+    if not _should_send_feedback(webhook_url, error_message):
+        log.info("Feedback to Odoo skipped (same API Key error already reported recently).")
         return
     if not is_safe_webhook_url(webhook_url):
         log.warning("Webhook URL rejected (unsafe): %s", webhook_url)
@@ -133,15 +180,29 @@ def send_feedback_to_odoo(webhook_url, variant_id, error_message, api_key=None):
         # Odoo verifica esta firma con su API key: nadie más puede inyectar errores falsos.
         headers["X-RAG-Signature"] = hmac.new(api_key.encode("utf-8"), body, hashlib.sha256).hexdigest()
     try:
-        response = requests.post(webhook_url, data=body, headers=headers, timeout=5)
+        # Sin seguir redirecciones: una redirección podría apuntar a una IP interna (SSRF)
+        response = requests.post(webhook_url, data=body, headers=headers,
+                                 timeout=Config.WEBHOOK_TIMEOUT_SECONDS, allow_redirects=False)
+        _breaker_record(webhook_url, True)
         log.info("Sent error feedback to Odoo. Status: %s", response.status_code)
     except Exception as e:  # pylint: disable=broad-except
+        _breaker_record(webhook_url, False)
         log.warning("Could not reach Odoo webhook: %s", e)
 
 
-def get_retry_count(properties):
+# ---------------------------------------------------------------------------
+# RabbitMQ: cabeceras y reenvío
+# ---------------------------------------------------------------------------
+def _header_int(properties, name):
     headers = (properties.headers or {}) if properties else {}
-    return int(headers.get("x-retry-count", 0))
+    try:
+        return int(headers.get(name, 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def get_retry_count(properties):
+    return _header_int(properties, "x-retry-count")
 
 
 def republish(ch, queue, body, properties, extra_headers):
@@ -175,11 +236,7 @@ def _authenticate_tenant(cur, api_key, action):
 
 def _sync_companies(cur, user_id, data):
     companies_data = data.get('companies')
-    if not isinstance(companies_data, list):
-        raise PermanentError("'companies' must be a list.")
     for comp in companies_data:
-        if not isinstance(comp, dict) or comp.get('id') in (None, "") or not comp.get('name'):
-            raise PermanentError(f"Invalid company in handshake: {comp}")
         cur.execute("""
             INSERT INTO user_companies (user_id, platform, platform_company_id, company_name)
             VALUES (%s, 'odoo', %s, %s)
@@ -195,18 +252,9 @@ def _ensure_company(cur, user_id, company_id, company_name):
     - 'global' (producto compartido en Odoo): no requiere registro.
     - Compañía nueva (creada en Odoo después del handshake): se registra automáticamente.
     - Compañía desactivada por el administrador: se rechaza el producto.
+    Se consulta primero para no consumir la secuencia con un INSERT por cada producto.
     """
     if company_id == GLOBAL_COMPANY_ID:
-        return
-
-    cur.execute("""
-        INSERT INTO user_companies (user_id, platform, platform_company_id, company_name)
-        VALUES (%s, 'odoo', %s, %s)
-        ON CONFLICT (user_id, platform, platform_company_id) DO NOTHING
-        RETURNING id
-    """, (user_id, company_id, company_name or f"Company {company_id}"))
-    if cur.fetchone():
-        log.info("Company %s auto-registered for tenant %s", company_id, user_id)
         return
 
     cur.execute("""
@@ -214,7 +262,15 @@ def _ensure_company(cur, user_id, company_id, company_name):
         WHERE user_id = %s AND platform = 'odoo' AND platform_company_id = %s
     """, (user_id, company_id))
     row = cur.fetchone()
-    if not row or not row[0]:
+    if row is None:
+        cur.execute("""
+            INSERT INTO user_companies (user_id, platform, platform_company_id, company_name)
+            VALUES (%s, 'odoo', %s, %s)
+            ON CONFLICT (user_id, platform, platform_company_id) DO NOTHING
+        """, (user_id, company_id, company_name or f"Company {company_id}"))
+        log.info("Company %s auto-registered for tenant %s", company_id, user_id)
+        return
+    if not row[0]:
         raise PermanentError(f"Company {company_id} is deactivated for this tenant.")
 
 
@@ -251,7 +307,7 @@ def _upsert_product(cur, user_id, data):
         data.get('stock'), data.get('category'), data.get('website_url'),
         data.get('image_128_url'), data.get('image_512_url'), data.get('image_1920_url'),
         company_id, data.get('company_name'),
-        data.get('accessories', ''), data.get('alternatives', ''),
+        data.get('accessories') or '', data.get('alternatives') or '',
     )
 
     cur.execute("SELECT content_hash FROM product_embeddings WHERE variant_id = %s AND user_id = %s",
@@ -320,16 +376,7 @@ def _reconcile(cur, user_id, data, event_ts):
     en los últimos RECONCILE_GRACE_MINUTES (evita borrar un producto creado en Odoo
     mientras se armaba la lista).
     """
-    if event_ts is None:
-        raise PermanentError("reconcile requires event_ts.")
-    variant_ids = data.get('variant_ids')
-    if not isinstance(variant_ids, list):
-        raise PermanentError("'variant_ids' must be a list.")
-    try:
-        valid_ids = sorted({int(v) for v in variant_ids})
-    except (TypeError, ValueError) as e:
-        raise PermanentError(f"Invalid variant id in reconcile: {e}") from e
-
+    valid_ids = sorted({int(v) for v in data.get('variant_ids')})
     keep_newer_than = event_ts - Config.RECONCILE_GRACE_MINUTES * 60 * 1_000_000
 
     cur.execute("""
@@ -363,6 +410,11 @@ def _reconcile(cur, user_id, data, event_ts):
 def _handle(cur, data):
     action = data.get('action')
     user_id = _authenticate_tenant(cur, data.get('api_key'), action)
+    try:
+        validate_payload(data)
+    except PayloadError as e:
+        raise PermanentError(str(e)) from e
+
     event_ts = normalize_event_ts(data.get('event_ts'))
     log.info("Processing '%s' (Tenant ID: %s)...", action, user_id)
 
@@ -374,13 +426,7 @@ def _handle(cur, data):
         _reconcile(cur, user_id, data, event_ts)
         return
 
-    if action not in VALID_PRODUCT_ACTIONS and action != 'delete':
-        raise PermanentError(f"Unknown action '{action}'.")
-
     variant_id = data.get('variant_id')
-    if variant_id is None:
-        raise PermanentError("variant_id is required.")
-
     if not _claim_version(cur, user_id, variant_id, event_ts):
         log.info("Variant %s: stale '%s' event skipped (event_ts=%s is older than the last applied).",
                  variant_id, action, event_ts)
@@ -403,6 +449,21 @@ def _log_sync_lag(data):
                  data.get('action'), data.get('variant_id'), lag_ms)
 
 
+def _safe_rollback(conn):
+    if conn is None:
+        return
+    try:
+        conn.rollback()
+    except Exception:  # pylint: disable=broad-except
+        reset_db_connection()
+
+
+def _park(ch, method, body, properties, variant_id, webhook_url, api_key, error_msg):
+    republish(ch, Config.PARKING_QUEUE_NAME, body, properties, {"x-error": error_msg[:500]})
+    send_feedback_to_odoo(webhook_url, variant_id, error_msg, api_key)
+    ch.basic_ack(delivery_tag=method.delivery_tag)
+
+
 def process_product_message(ch, method, properties, body):
     conn = None
     variant_id = None
@@ -422,35 +483,48 @@ def process_product_message(ch, method, properties, body):
         api_key = data.get('api_key')
 
         conn = get_db_connection()
-        with conn.cursor() as cur:
-            _handle(cur, data)
+        try:
+            with conn.cursor() as cur:
+                _handle(cur, data)
+        except (psycopg2.DataError, psycopg2.IntegrityError) as e:
+            # Datos que la base nunca va a aceptar (texto muy largo, número fuera de rango...)
+            raise PermanentError(f"Data rejected by the database: {str(e).strip()}") from e
         conn.commit()
         ch.basic_ack(delivery_tag=method.delivery_tag)
         _log_sync_lag(data)
 
     except PermanentError as e:
-        if conn:
-            conn.rollback()
+        _safe_rollback(conn)
         log.error("[PARKING] variant=%s: %s", variant_id, e)
-        republish(ch, Config.PARKING_QUEUE_NAME, body, properties, {"x-error": str(e)[:500]})
-        send_feedback_to_odoo(webhook_url, variant_id, str(e), api_key)
-        ch.basic_ack(delivery_tag=method.delivery_tag)
+        _park(ch, method, body, properties, variant_id, webhook_url, api_key, str(e))
 
-    except Exception as e:
-        if conn:
-            conn.rollback()
+    except (psycopg2.OperationalError, psycopg2.InterfaceError) as e:
+        # Base de datos caída o conexión perdida: no es culpa del mensaje.
+        # Se reintenta sin gastar MAX_RETRIES y sin molestar a Odoo hasta agotar INFRA_MAX_RETRIES.
+        _safe_rollback(conn)
+        reset_db_connection()
+        infra_attempts = _header_int(properties, "x-infra-retry-count")
+        error_msg = f"Database unavailable: {str(e).strip()}"
+        if infra_attempts >= Config.INFRA_MAX_RETRIES:
+            log.error("[PARKING] variant=%s: database unavailable after %d retries: %s",
+                      variant_id, infra_attempts, e)
+            _park(ch, method, body, properties, variant_id, webhook_url, api_key, error_msg)
+        else:
+            log.warning("[INFRA RETRY %d/%d] variant=%s: %s",
+                        infra_attempts + 1, Config.INFRA_MAX_RETRIES, variant_id, e)
+            republish(ch, Config.RETRY_QUEUE_NAME, body, properties,
+                      {"x-infra-retry-count": infra_attempts + 1, "x-error": error_msg[:500]})
+            ch.basic_ack(delivery_tag=method.delivery_tag)
+
+    except Exception as e:  # pylint: disable=broad-except
+        _safe_rollback(conn)
         attempts = get_retry_count(properties)
-        error_msg = f"Database or processing failure: {e}"
+        error_msg = f"Processing failure: {e}"
         if attempts >= Config.MAX_RETRIES:
             log.error("[PARKING] variant=%s failed after %d retries: %s", variant_id, attempts, e)
-            republish(ch, Config.PARKING_QUEUE_NAME, body, properties, {"x-error": error_msg[:500]})
-            send_feedback_to_odoo(webhook_url, variant_id, error_msg, api_key)
+            _park(ch, method, body, properties, variant_id, webhook_url, api_key, error_msg)
         else:
             log.warning("[RETRY %d/%d] variant=%s: %s", attempts + 1, Config.MAX_RETRIES, variant_id, e)
             republish(ch, Config.RETRY_QUEUE_NAME, body, properties,
                       {"x-retry-count": attempts + 1, "x-error": error_msg[:500]})
-        ch.basic_ack(delivery_tag=method.delivery_tag)
-
-    finally:
-        if conn:
-            conn.close()
+            ch.basic_ack(delivery_tag=method.delivery_tag)

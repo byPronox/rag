@@ -18,12 +18,60 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ----------------------------------------------------
-  # NODO 1: Calidad, Seguridad estática y Pruebas
-  # (una sola instalación de dependencias por microservicio)
-  # ----------------------------------------------------
-  quality-and-tests:
-    name: Quality & Tests (${{ matrix.service }})
+  code-quality:
+    name: Code Quality & Security (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - microservice_1_sync
+          - microservice_2_core
+          - microservice_3_rag
+    defaults:
+      run:
+        working-directory: backend/${{ matrix.service }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linters
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pylint bandit
+
+      - name: Flake8 critical syntax check
+        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Flake8 full report
+        run: flake8 . --output-file=flake8-report.txt --exit-zero
+
+      - name: Pylint static analysis
+        run: find . -type f -name "*.py" | xargs pylint --disable=import-error --output-format=text > pylint-report.txt || true
+
+      - name: Bandit security analysis
+        run: bandit -r . -x ./tests -f txt -o bandit-report.txt || true
+
+      - name: Upload QA and security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-reports-${{ matrix.service }}
+          if-no-files-found: ignore
+          path: |
+            backend/${{ matrix.service }}/flake8-report.txt
+            backend/${{ matrix.service }}/pylint-report.txt
+            backend/${{ matrix.service }}/bandit-report.txt
+
+  testing:
+    name: Unit Tests & Coverage (${{ matrix.service }})
+    needs: code-quality
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
@@ -48,7 +96,6 @@ jobs:
         with:
           python-version: "3.12"
           cache: "pip"
-          # Caché separado por microservicio (antes los 3 compartían la misma clave)
           cache-dependency-path: backend/${{ matrix.service }}/requirements.txt
 
       - name: Cache Hugging Face models
@@ -61,59 +108,34 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install flake8 pylint bandit pytest httpx pytest-cov
+          pip install pytest httpx pytest-cov
           if [ "${{ matrix.ml }}" = "true" ]; then
-            # torch solo CPU (~200 MB) en lugar de la versión con CUDA (varios GB)
             pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
           else
             pip install -r requirements.txt
           fi
 
-      - name: Capstone - Critical Syntax Check
-        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-
-      - name: Checkstyle Equivalent (Flake8 Full Report)
-        run: flake8 . --output-file=flake8-report.txt --exit-zero
-
-      - name: PMD Equivalent (Pylint Static Analysis)
-        run: find . -type f -name "*.py" | xargs pylint --output-format=text > pylint-report.txt || true
-
-      - name: Security Static Analysis (Bandit)
-        # Se excluyen los tests: 'assert' en pytest genera falsos positivos (B101)
-        run: bandit -r . -x ./tests -f txt -o bandit-report.txt || true
-
-      - name: JaCoCo Equivalent (Pytest + Coverage)
+      - name: Run tests with coverage
         env:
           DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy_db"
-          GROQ_API_KEY: "dummy_key_solo_para_tests"
-          SECRET_KEY: "dummy_secret_jwt_para_tests"
+          GROQ_API_KEY: "dummy_key_for_tests"
+          SECRET_KEY: "dummy_jwt_secret_for_tests"
         run: pytest --cov=. --cov-report=xml:coverage.xml --cov-fail-under=80
 
-      - name: Upload QA, Security & Coverage Reports
+      - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: reports-${{ matrix.service }}
+          name: coverage-${{ matrix.service }}
           if-no-files-found: ignore
-          path: |
-            backend/${{ matrix.service }}/flake8-report.txt
-            backend/${{ matrix.service }}/pylint-report.txt
-            backend/${{ matrix.service }}/bandit-report.txt
-            backend/${{ matrix.service }}/coverage.xml
+          path: backend/${{ matrix.service }}/coverage.xml
 
-  # ----------------------------------------------------
-  # NODO 2: Build de la imagen + Escáner de vulnerabilidades (Trivy)
-  # Solo en main (push / manual), no en cada Pull Request
-  # ----------------------------------------------------
   docker-scan:
-    name: Docker Build & Trivy (${{ matrix.service }})
-    needs: quality-and-tests
+    name: Docker Build & Trivy Scan (${{ matrix.service }})
+    needs: testing
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      IMAGE: rag-${{ matrix.service }}:ci
     strategy:
       fail-fast: false
       matrix:
@@ -125,53 +147,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # Opcional: si Docker Hub no responde, el pipeline sigue igual
-      - name: Log in to Docker Hub (optional)
-        if: env.DOCKERHUB_USERNAME != ''
-        continue-on-error: true
-        timeout-minutes: 2
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      # Buildx descarga 'moby/buildkit' de Docker Hub; si falla, se usa el build normal
       - name: Set up Docker Buildx
-        id: buildx
-        continue-on-error: true
-        timeout-minutes: 3
         uses: docker/setup-buildx-action@v3
 
-      - name: Build image (with layer cache)
-        if: steps.buildx.outcome == 'success'
+      - name: Build image with layer cache
         uses: docker/build-push-action@v6
         with:
           context: backend/${{ matrix.service }}
           load: true
           push: false
-          tags: ${{ env.IMAGE }}
+          tags: rag-${{ matrix.service }}:ci
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
-
-      - name: Build image (fallback without cache)
-        if: steps.buildx.outcome != 'success'
-        run: |
-          echo "::warning::Buildx unavailable (Docker Hub unreachable). Building without layer cache."
-          n=0
-          until docker build -t "$IMAGE" ./backend/${{ matrix.service }}; do
-            n=$((n+1))
-            if [ "$n" -ge 3 ]; then
-              echo "Docker build failed after $n attempts."
-              exit 1
-            fi
-            echo "Build failed (attempt $n). Retrying in $((n*20))s..."
-            sleep $((n*20))
-          done
 
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ${{ env.IMAGE }}
+          image-ref: rag-${{ matrix.service }}:ci
           format: table
           exit-code: "0"
           severity: CRITICAL,HIGH

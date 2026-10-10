@@ -1,4 +1,6 @@
 import hashlib
+import psycopg2
+from schemas.payloads import validate_payload, PayloadError
 import json
 import hmac
 from unittest.mock import patch, MagicMock
@@ -112,7 +114,7 @@ def test_texto_sin_cambios_no_revectoriza(mock_vector, mock_get_db, mock_rabbitm
 @patch('controllers.message_controller.embedding_service.generate_vector')
 def test_compania_desactivada_va_a_parking(mock_vector, mock_feedback, mock_get_db, mock_rabbitmq_channel):
     channel, method = mock_rabbitmq_channel
-    mock_conn, _ = _preparar_db(mock_get_db, [(99,), None, (False,)])
+    mock_conn, _ = _preparar_db(mock_get_db, [(99,), (False,)])
 
     process_product_message(channel, method, None, json.dumps(PRODUCTO))
 
@@ -168,7 +170,7 @@ def test_accion_desconocida_va_a_parking(mock_get_db, mock_rabbitmq_channel):
     mock_conn.commit.assert_not_called()
     assert _cola_publicada(channel) == mc.Config.PARKING_QUEUE_NAME
     channel.basic_ack.assert_called_once()
-    mock_conn.close.assert_called_once()
+    mock_conn.close.assert_not_called()
 
 
 # ------------------------- Errores transitorios y reintentos -------------------------
@@ -189,7 +191,7 @@ def test_error_de_bd_se_envia_a_reintento(mock_feedback, mock_get_db, mock_rabbi
     channel.basic_ack.assert_called_once()
     channel.basic_nack.assert_not_called()
     mock_feedback.assert_not_called()  # no se molesta a Odoo en cada reintento
-    mock_conn.close.assert_called_once()
+    mock_conn.close.assert_not_called()
 
 
 @patch('controllers.message_controller.get_db_connection')
@@ -503,3 +505,136 @@ def test_reconcile_sin_event_ts_va_a_parking(mock_get_db, mock_rabbitmq_channel)
 
     mock_conn.commit.assert_not_called()
     assert _cola_publicada(channel) == mc.Config.PARKING_QUEUE_NAME
+
+
+# ------------------------- Clasificación de errores (punto 5) -------------------------
+@patch('controllers.message_controller.get_db_connection')
+@patch('controllers.message_controller.send_feedback_to_odoo')
+def test_dato_invalido_para_la_bd_va_directo_a_parking(mock_feedback, mock_get_db, mock_rabbitmq_channel):
+    """Regresión: un DataError se reintentaba 3 veces aunque nunca se iba a arreglar."""
+    channel, method = mock_rabbitmq_channel
+    mock_conn, mock_cursor = _preparar_db(mock_get_db, (99,))
+    mock_cursor.execute.side_effect = [None, psycopg2.DataError("value too long for type character varying(100)")]
+
+    process_product_message(channel, method, None,
+                            json.dumps({"api_key": "valid_key", "action": "delete", "variant_id": 123}))
+
+    assert _cola_publicada(channel) == mc.Config.PARKING_QUEUE_NAME
+    mock_conn.rollback.assert_called_once()
+    mock_feedback.assert_called_once()
+    channel.basic_ack.assert_called_once()
+
+
+@patch('controllers.message_controller.reset_db_connection')
+@patch('controllers.message_controller.get_db_connection')
+@patch('controllers.message_controller.send_feedback_to_odoo')
+def test_bd_caida_reintenta_sin_gastar_reintentos(mock_feedback, mock_get_db, mock_reset, mock_rabbitmq_channel):
+    """Regresión: con la base caída 1 minuto, los mensajes terminaban en parking."""
+    channel, method = mock_rabbitmq_channel
+    mock_get_db.side_effect = psycopg2.OperationalError("server closed the connection")
+    props = pika.BasicProperties(headers={"x-retry-count": 2})
+
+    process_product_message(channel, method, props, json.dumps(PRODUCTO))
+
+    assert _cola_publicada(channel) == mc.Config.RETRY_QUEUE_NAME
+    headers = channel.basic_publish.call_args.kwargs["properties"].headers
+    assert headers["x-infra-retry-count"] == 1
+    assert headers["x-retry-count"] == 2  # no se gasta el contador normal
+    mock_reset.assert_called_once()
+    mock_feedback.assert_not_called()
+    channel.basic_ack.assert_called_once()
+
+
+@patch('controllers.message_controller.reset_db_connection')
+@patch('controllers.message_controller.get_db_connection')
+@patch('controllers.message_controller.send_feedback_to_odoo')
+def test_bd_caida_demasiado_tiempo_va_a_parking(mock_feedback, mock_get_db, _mock_reset, mock_rabbitmq_channel):
+    channel, method = mock_rabbitmq_channel
+    mock_get_db.side_effect = psycopg2.OperationalError("down")
+    props = pika.BasicProperties(headers={"x-infra-retry-count": mc.Config.INFRA_MAX_RETRIES})
+
+    process_product_message(channel, method, props, json.dumps(PRODUCTO))
+
+    assert _cola_publicada(channel) == mc.Config.PARKING_QUEUE_NAME
+    mock_feedback.assert_called_once()
+
+
+# ------------------------- Validación del payload (punto 7) -------------------------
+@patch('controllers.message_controller.get_db_connection')
+@patch('controllers.message_controller.send_feedback_to_odoo')
+@patch('controllers.message_controller.embedding_service.generate_vector')
+def test_variant_id_invalido_va_a_parking_sin_reintentar(mock_vector, mock_feedback, mock_get_db, mock_rabbitmq_channel):
+    """Regresión: variant_id='abc' causaba un error de BD que se reintentaba 3 veces."""
+    channel, method = mock_rabbitmq_channel
+    mock_conn, _ = _preparar_db(mock_get_db, (99,))
+
+    process_product_message(channel, method, None, json.dumps({**PRODUCTO, "variant_id": "abc"}))
+
+    mock_vector.assert_not_called()
+    mock_conn.commit.assert_not_called()
+    assert _cola_publicada(channel) == mc.Config.PARKING_QUEUE_NAME
+    assert "variant_id" in mock_feedback.call_args[0][2]
+
+
+def test_precio_fuera_de_rango_es_invalido():
+    """NUMERIC(10,2) admite como máximo 99.999.999,99."""
+    try:
+        validate_payload({**PRODUCTO, "price_included": 150_000_000})
+        assert False, "debió fallar"
+    except PayloadError as e:
+        assert "price_included" in str(e)
+
+
+def test_categoria_demasiado_larga_es_invalida():
+    try:
+        validate_payload({**PRODUCTO, "category": "x" * 101})
+        assert False, "debió fallar"
+    except PayloadError as e:
+        assert "category" in str(e)
+
+
+def test_payloads_validos_de_odoo_pasan():
+    validate_payload(PRODUCTO)
+    validate_payload({"action": "delete", "variant_id": 5})
+    validate_payload({"action": "sync_companies", "companies": [{"id": 1, "name": "A"}]})
+    validate_payload({"action": "reconcile", "variant_ids": [1, 2], "event_ts": 1700000000000000})
+
+
+# ------------------------- Compañía nueva sin consumir la secuencia -------------------------
+@patch('controllers.message_controller.get_db_connection')
+@patch('controllers.message_controller.embedding_service.generate_vector')
+def test_compania_nueva_se_registra(mock_vector, mock_get_db, mock_rabbitmq_channel):
+    channel, method = mock_rabbitmq_channel
+    # auth, compañía no existe, sin hash previo
+    _, mock_cursor = _preparar_db(mock_get_db, [(99,), None, None])
+    mock_vector.return_value = [0.1]
+
+    process_product_message(channel, method, None, json.dumps(PRODUCTO))
+
+    sqls = [c[0][0] for c in mock_cursor.execute.call_args_list]
+    assert "SELECT is_active FROM user_companies" in sqls[1]
+    assert "INSERT INTO user_companies" in sqls[2]
+    channel.basic_ack.assert_called_once()
+
+
+# ------------------------- Webhook: circuit breaker (punto 6) -------------------------
+@patch('controllers.message_controller.is_safe_webhook_url', return_value=True)
+@patch('controllers.message_controller.requests.post')
+def test_circuit_breaker_deja_de_llamar_a_odoo_caido(mock_post, _mock_safe):
+    """Regresión: con Odoo caído, cada mensaje esperaba el timeout completo del webhook."""
+    mc._webhook_breaker.clear()
+    mc._feedback_sent_at.clear()
+    mock_post.side_effect = requests.exceptions.ConnectTimeout("caido")
+    with patch.object(mc.Config, "WEBHOOK_BREAKER_THRESHOLD", 3):
+        for variant in range(10):
+            send_feedback_to_odoo("https://odoo-caido.test/api/rag/feedback", variant, "fallo")
+    assert mock_post.call_count == 3
+
+
+@patch('controllers.message_controller.is_safe_webhook_url', return_value=True)
+@patch('controllers.message_controller.requests.post')
+def test_circuit_breaker_se_reinicia_con_exito(mock_post, _mock_safe):
+    mc._webhook_breaker.clear()
+    mock_post.return_value.status_code = 200
+    send_feedback_to_odoo("https://odoo-ok.test/api/rag/feedback", 1, "fallo")
+    assert "https://odoo-ok.test/api/rag/feedback" not in mc._webhook_breaker

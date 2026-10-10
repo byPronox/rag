@@ -8,9 +8,9 @@
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
                 <app data-string="RAG AI Sync" string="RAG AI Sync" name="rag_rabbitmq_sync">
-                        <setting string="Enable Synchronization">
-                            <field name="rag_sync_active" widget="boolean_toggle"/>
-                        </setting>
+                    <setting string="Enable Synchronization">
+                        <field name="rag_sync_active" widget="boolean_toggle"/>
+                    </setting>
                     <block title="RAG Config Connection" name="rag_rabbitmq_connection">
                         <setting string="URL" help="Provided by RAG system (e.g., amqps://user:pass@railway.app:5672)">
                             <field name="rag_rabbitmq_url"/>
@@ -21,12 +21,16 @@
                         <setting string="System API Key" help="Unique API Key generated in your RAG system account">
                             <field name="rag_api_key" password="True"/>
                         </setting>
-                        <setting string="Public Base URL" help="Your Ngrok or Production URL for serving images">
+                        <setting string="Public Base URL" help="Your Ngrok or Production URL for serving images and receiving sync errors">
                             <field name="rag_public_base_url"/>
+                        </setting>
+                        <setting string="Test Connection" help="Checks that RabbitMQ accepts the connection and that the queue exists.">
+                            <button name="action_rag_test_connection" type="object"
+                                    string="Test connection" class="btn-secondary" icon="fa-plug"/>
                         </setting>
                         <setting string="Full Resync" help="Re-sends every published product to the AI and removes from the index the products that no longer exist in Odoo.">
                             <button name="action_rag_full_resync" type="object"
-                                string="Run full resync" class="btn-secondary" icon="fa-refresh"/>
+                                    string="Run full resync" class="btn-secondary" icon="fa-refresh"/>
                         </setting>
                     </block>
                 </app>

@@ -2,6 +2,7 @@ import hashlib
 import hmac
 import json
 import logging
+
 from markupsafe import Markup
 from odoo import http
 from odoo.http import request
@@ -27,26 +28,36 @@ class RagWebhookController(http.Controller):
             variant_id = data.get('variant_id')
             error_msg = str(data.get('error') or 'Unknown error')[:1000]
             _logger.error("RAG Sync Failed for Product ID %s: %s", variant_id, error_msg)
+            sender = request.env['rag.rabbitmq.sender'].sudo()
 
+            if 'API Key' in error_msg:
+                sender._rag_notify_admins(
+                    'RAG AI: invalid API Key',
+                    'The RAG backend rejected the API Key configured in Settings > RAG AI Sync. '
+                    'Fix it and then press "Run full resync".',
+                    throttle_key='invalid_key', every_seconds=3600, sticky=True)
+                return request.make_json_response({'status': 'received'})
+
+            product = request.env['product.product'].sudo()
             if variant_id:
-                product = request.env['product.product'].sudo().browse(int(variant_id))
-                if product.exists():
-                    product.message_post(
-                        body=Markup("<div style='color:red;'><b>⚠️ Error RAG AI:</b> %s</div>") % error_msg)
+                try:
+                    product = product.browse(int(variant_id)).exists()
+                except (TypeError, ValueError):
+                    product = product.browse()
 
-                    admins = request.env.ref('base.group_system').sudo().users
-                    for user in admins:
-                        request.env['bus.bus'].sudo()._sendone(
-                            user.partner_id,
-                            'simple_notification',
-                            {
-                                'type': 'danger',
-                                'title': 'RAG Sync Error',
-                                'message': f'Failed to sync {product.display_name}: {error_msg}',
-                                'sticky': False,
-                            }
-                        )
+            if product:
+                product.message_post(
+                    body=Markup("<div style='color:red;'><b>⚠️ Error RAG AI:</b> %s</div>") % error_msg)
+                label = product.display_name
+            else:
+                label = 'RAG sync'
+
+            # Máximo una notificación por minuto
+            sender._rag_notify_admins(
+                'RAG Sync Error',
+                f'{label}: {error_msg} (more errors may follow; see the product chatter or the server log)',
+                throttle_key='feedback', every_seconds=60)
             return request.make_json_response({'status': 'received'})
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             _logger.exception("Error processing RAG feedback webhook")
             return request.make_json_response({'status': 'error'}, status=400)

@@ -1,8 +1,9 @@
 {
     'name': 'RAG Sync',
-    'version': '1.2',
+    'version': '17.0.1.3.0',
     'category': 'Integration',
     'summary': 'Multi-tenant synchronization of product variants to RabbitMQ for RAG AI',
+    'license': 'LGPL-3',
     'depends': ['base', 'product', 'stock', 'website_sale', 'mail'],
     'data': [
         'security/ir.model.access.csv',

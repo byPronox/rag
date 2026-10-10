@@ -9,15 +9,51 @@
                 <field name="action"/>
                 <field name="variant_id"/>
                 <field name="attempts"/>
+                <field name="write_date" string="Last attempt"/>
                 <field name="last_error"/>
             </tree>
+        </field>
+    </record>
+
+    <record id="rag_outbox_view_form" model="ir.ui.view">
+        <field name="name">rag.outbox.form</field>
+        <field name="model">rag.outbox</field>
+        <field name="arch" type="xml">
+            <form create="false" edit="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="action"/>
+                            <field name="variant_id"/>
+                            <field name="attempts"/>
+                        </group>
+                        <group>
+                            <field name="create_date"/>
+                            <field name="write_date" string="Last attempt"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="last_error"/>
+                        <field name="payload"/>
+                    </group>
+                </sheet>
+            </form>
         </field>
     </record>
 
     <record id="rag_outbox_action" model="ir.actions.act_window">
         <field name="name">RAG Outbox (pending)</field>
         <field name="res_model">rag.outbox</field>
-        <field name="view_mode">tree</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <record id="action_rag_outbox_publish_now" model="ir.actions.server">
+        <field name="name">Publish pending now</field>
+        <field name="model_id" ref="model_rag_outbox"/>
+        <field name="binding_model_id" ref="model_rag_outbox"/>
+        <field name="binding_view_types">list</field>
+        <field name="state">code</field>
+        <field name="code">action = model._rag_publish_now()</field>
     </record>
 
     <menuitem id="rag_outbox_menu" name="RAG Outbox" parent="base.menu_custom"

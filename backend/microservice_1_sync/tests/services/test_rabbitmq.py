@@ -22,6 +22,8 @@ def test_worker_declara_tres_colas_y_consume(mock_connection_class, mock_sleep):
 
     start_worker()
 
+    mock_channel.confirm_delivery.assert_called_once()
+
     cfg = rabbitmq_service.Config
     colas = [c.kwargs["queue"] for c in mock_channel.queue_declare.call_args_list]
     assert colas == [cfg.QUEUE_NAME, cfg.RETRY_QUEUE_NAME, cfg.PARKING_QUEUE_NAME]
