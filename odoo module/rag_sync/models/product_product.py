@@ -56,8 +56,8 @@ class ProductProduct(models.Model):
                     _logger.exception("RAG: could not prepare payload for product id=%s (skipped).", product.id)
         finally:
             # El payload se arma con sudo + todas las compañías: eso deja en la caché del ORM registros
-            # (impuestos de otras compañías, atributos) que el usuario actual no puede leer y la lectura
-            # posterior al guardado fallaría con AccessError. Se limpia la caché para evitarlo.
+            # que el usuario actual no puede leer y la lectura posterior al guardado fallaría con
+            # AccessError. Se limpia la caché para evitarlo.
             self.env.invalidate_all()
         return payloads
 
@@ -84,12 +84,32 @@ class ProductProduct(models.Model):
         return [n for n in names if n]
 
     # ==========================================
-    # PAYLOADS
+    # STOCK DISPONIBLE (lo que el comprador realmente puede comprar)
+    # ==========================================
+    def _rag_stock_by_product(self):
+        """{product_id: stock disponible}.
+        free_qty = físico - reservado (pedidos confirmados aún no entregados), contado solo en los
+        almacenes de la compañía del producto. Los productos compartidos ('global') suman todas.
+        Los consumibles no llevan inventario: se envía 0."""
+        result = dict.fromkeys(self.ids, 0.0)
+        by_company = {}
+        for product in self.filtered(lambda p: p.type == 'product'):
+            by_company.setdefault(product.company_id.id, []).append(product.id)
+        for company_id, ids in by_company.items():
+            products = self.browse(ids)
+            if company_id:
+                products = products.with_context(allowed_company_ids=[company_id])
+            quantities = products._compute_quantities_dict(None, None, None)
+            for product_id, values in quantities.items():
+                result[product_id] = values['free_qty']
+        return result
+
+    # ==========================================
+    # PAYLOADS (sin API key: se agrega al publicar)
     # ==========================================
     def _prepare_rag_delete_payload(self):
         self.ensure_one()
         return {
-            'api_key': self.env['ir.config_parameter'].sudo().get_param('rag_rabbitmq_sync.api_key'),
             'action': 'delete',
             'variant_id': self.id,
             'webhook_url': f"{self._rag_base_url()}/api/rag/feedback",
@@ -97,7 +117,6 @@ class ProductProduct(models.Model):
 
     def _prepare_rag_payload(self, action):
         self.ensure_one()
-        api_key = self.env['ir.config_parameter'].sudo().get_param('rag_rabbitmq_sync.api_key')
         base_url = self._rag_base_url()
         company = self.company_id
 
@@ -142,7 +161,6 @@ class ProductProduct(models.Model):
             tax_percent = 0.0
 
         return {
-            'api_key': api_key,
             'action': action,
             'variant_id': self.id,
             'template_id': self.product_tmpl_id.id,
@@ -155,7 +173,7 @@ class ProductProduct(models.Model):
             'alternatives': ", ".join(alternatives) if alternatives else "",
             'category': category_name,
             'website_url': website_url or None,
-            'stock': self.qty_available,
+            'stock': self._rag_stock_by_product()[self.id],
             'image_128_url': img_128,
             'image_512_url': img_512,
             'image_1920_url': img_1920,
@@ -206,17 +224,22 @@ class ProductProduct(models.Model):
     # ==========================================
     # STOCK, BOTÓN MANUAL Y CRON
     # ==========================================
-    def _rag_enqueue_stock_update(self):
-        """Encola la actualización de las variantes sincronizables y guarda el stock enviado.
-        Lo usan stock.move (al validar entregas/recepciones/ajustes) y el cron de respaldo."""
+    def _rag_enqueue_stock_update(self, update_synced=True):
+        """Encola la actualización de las variantes sincronizables.
+        update_synced=False desde entregas/reservas: no escribe en la fila del producto, así dos
+        validaciones simultáneas del mismo producto no chocan. El cron hace esa contabilidad."""
         syncable = self.sudo().filtered(lambda p: p._rag_is_syncable())
         if not syncable:
             return 0
         payloads = syncable._rag_safe_payloads(lambda p: p._prepare_rag_payload('update'))
         self.env['rag.outbox'].enqueue(payloads)
-        Product = self.env['product.product'].sudo().with_context(rag_skip_sync=True)
-        for payload in payloads:
-            Product.browse(payload['variant_id']).write({'rag_synced_qty': payload['stock'] or 0.0})
+        if update_synced and payloads:
+            self.env.cr.execute("""
+                UPDATE product_product AS p SET rag_synced_qty = v.qty
+                FROM unnest(%s::int[], %s::float8[]) AS v(id, qty)
+                WHERE p.id = v.id
+            """, ([pl['variant_id'] for pl in payloads], [float(pl['stock'] or 0.0) for pl in payloads]))
+            self.env['product.product'].invalidate_model(['rag_synced_qty'])
         return len(payloads)
 
     def action_massive_sync_rag(self):
@@ -247,15 +270,17 @@ class ProductProduct(models.Model):
 
     @api.model
     def _cron_rag_sync_stock(self):
-        """Red de seguridad: detecta cambios de stock que no pasaron por stock.move."""
+        """Red de seguridad: detecta cambios de stock disponible que no se enviaron todavía."""
         products = self._rag_system_env().search(self._rag_syncable_domain())
+        if not products:
+            return
+        stock = products._rag_stock_by_product()
         changed = products.filtered(
-            lambda p: float_compare(p.qty_available, p.rag_synced_qty, precision_digits=2) != 0)
+            lambda p: float_compare(stock[p.id], p.rag_synced_qty, precision_digits=2) != 0)
         if not changed:
             return
-        queued = changed._rag_enqueue_stock_update()
+        queued = changed._rag_enqueue_stock_update(update_synced=True)
         _logger.info("RAG stock sync: %d product(s) queued, %d skipped.", queued, len(changed) - queued)
-
 
     # ==========================================
     # RECONCILIACIÓN
@@ -263,7 +288,6 @@ class ProductProduct(models.Model):
     @api.model
     def _rag_reconcile_payload(self, variant_ids):
         return {
-            'api_key': self.env['ir.config_parameter'].sudo().get_param('rag_rabbitmq_sync.api_key'),
             'action': 'reconcile',
             'variant_ids': list(variant_ids),
             'webhook_url': f"{self._rag_base_url()}/api/rag/feedback",
