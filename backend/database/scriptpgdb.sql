@@ -45,6 +45,10 @@ INSERT INTO ai_models (id, name, provider, type, is_active, description)
 VALUES ('llama3-8b-8192', 'Llama 3 8B', 'Groq', 'llm', true, 'Fast inference LLM model')
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO ai_models (id, name, provider, type, is_active, description)
+VALUES ('openai/gpt-oss-20b', 'GPT-OSS 20B', 'Groq', 'llm', true, 'Default production chat model')
+ON CONFLICT (id) DO NOTHING;
+
 -- Global SaaS Configuration
 CREATE TABLE global_settings (
     id INTEGER PRIMARY KEY DEFAULT 1,
@@ -61,7 +65,7 @@ CREATE TABLE global_settings (
 
 -- Insert base global configuration
 INSERT INTO global_settings (id, default_llm_model, default_embedding_model)
-VALUES (1, 'llama3-8b-8192', 'all-MiniLM-L6-v2')
+VALUES (1, 'openai/gpt-oss-20b', 'all-MiniLM-L6-v2')
 ON CONFLICT DO NOTHING;
 
 -- Parent Table: Users (Tenants / Admins)
@@ -94,7 +98,7 @@ CREATE TABLE user_companies (
     company_name VARCHAR(255) NOT NULL,
 
     selected_embedding_model VARCHAR(100) DEFAULT 'all-MiniLM-L6-v2' REFERENCES ai_models(id) ON DELETE SET DEFAULT,
-    selected_llm_model VARCHAR(100) DEFAULT 'llama3-8b-8192' REFERENCES ai_models(id) ON DELETE SET DEFAULT,
+    selected_llm_model VARCHAR(100) DEFAULT 'openai/gpt-oss-20b' REFERENCES ai_models(id) ON DELETE SET DEFAULT,
     welcome_message TEXT DEFAULT 'Hello! How can I help you today?',
     system_prompt TEXT DEFAULT 'You are an expert sales assistant...',
     theme_color VARCHAR(50) DEFAULT '#8b5cf6',
@@ -147,6 +151,9 @@ CREATE TABLE search_history (
     company_id VARCHAR(100), -- Added to track which company generated the search
     session_id VARCHAR(100), -- Track anonymous/guest or logged-in session
     query_text TEXT,
+    results_count INTEGER,   -- productos devueltos (0 = búsqueda sin resultados)
+    top_score NUMERIC(6, 4), -- similitud del mejor resultado
+    latency_ms INTEGER,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -161,3 +168,8 @@ CREATE TABLE chat_history (
     latency_ms INTEGER DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Índices por tenant/compañía (consultas de MS3 y del panel)
+CREATE INDEX idx_product_embeddings_tenant ON product_embeddings (user_id, company_id, embedding_model);
+CREATE INDEX idx_chat_history_session ON chat_history (session_id, user_id, company_id, created_at);
+CREATE INDEX idx_search_history_tenant ON search_history (user_id, company_id, created_at);

@@ -1,113 +1,117 @@
+import logging
 import time
-import re
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from sqlalchemy import text
-from pydantic import BaseModel
-from database.connection import get_db
-from api.deps import validate_tenant_api_key
-from services.embedding_service import embedding_service
-from services.pgvector_service import search_similar_products
-from services.llm_service import generate_rag_response
 
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy import text
+from sqlalchemy.orm import Session
+
+from api.deps import get_active_company, validate_tenant_api_key
+from config.settings import settings
+from database.connection import get_db
+from services.embedding_service import embedding_service
+from services.intent import is_follow_up, is_small_talk
+from services.llm_service import LLMUnavailableError, extract_references, generate_rag_response
+from services.pgvector_service import chat_params, company_categories, public_product, search_products
+from services.prompt_guard import is_prompt_injection
+
+log = logging.getLogger("rag.chat")
 router = APIRouter()
 
-class ChatRequest(BaseModel):
-    session_id: str
-    message: str
-    company_id: str
 
-def is_safe_user_input(text: str) -> bool:
-    blacklist_patterns = [
-        r"ignore\s+(all\s+)?previous\s+instructions",
-        r"system\s+prompt",
-        r"forget\s+all",
-        r"bypass",
-        r"supreme_prompt"
-    ]
-    for pattern in blacklist_patterns:
-        if re.search(pattern, text, re.IGNORECASE):
-            return False
-    return True
+class ChatRequest(BaseModel):
+    session_id: str = Field(..., min_length=1, max_length=100)
+    message: str = Field(..., min_length=1)
+    company_id: str = Field(..., min_length=1, max_length=100)
+
 
 @router.get("/config")
 def get_chat_config(company_id: str, auth: dict = Depends(validate_tenant_api_key), db: Session = Depends(get_db)):
-    sql_company = text("""
-        SELECT welcome_message, theme_color, chat_icon 
-        FROM user_companies 
-        WHERE user_id = :uid AND platform_company_id = :cid AND is_active = true
-    """)
-    company = db.execute(sql_company, {"uid": auth["user_id"], "cid": company_id}).fetchone()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Company configuration not found")
-
+    company = get_active_company(db, auth["user_id"], company_id)
     return {
-        "welcome_message": company[0],
-        "theme_color": company[1],
-        "chat_icon": company[2]
+        "welcome_message": company["welcome_message"],
+        "theme_color": company["theme_color"],
+        "chat_icon": company["chat_icon"],
     }
+
+
+def load_history(db, user_id, company_id, session_id):
+    """Últimos N mensajes de ESTA sesión, tenant y compañía, en orden cronológico."""
+    rows = db.execute(text("""
+        SELECT role, message FROM chat_history
+        WHERE session_id = :sid AND user_id = :uid AND company_id = :cid
+        ORDER BY created_at DESC, id DESC LIMIT :limit
+    """), {"sid": session_id, "uid": user_id, "cid": company_id,
+           "limit": settings.CHAT_HISTORY_MESSAGES}).fetchall()
+    return [(row[0], row[1]) for row in reversed(rows)]
+
+
+def retrieve_for_chat(db, user_id, company_id, message, history):
+    """Busca con el mensaje actual y, si es un seguimiento ("¿y en negro?"), también con el mensaje
+    anterior del cliente; se queda con el mejor puntaje de cada producto."""
+    params = chat_params()
+    queries = [message]
+    previous_user = next((content for role, content in reversed(history) if role == "user"), None)
+    if previous_user and is_follow_up(message):
+        queries.append(f"{previous_user} {message}")
+
+    merged = {}
+    for query in queries:
+        vector = embedding_service.generate_vector(query)
+        for product in search_products(db, user_id, company_id, query, vector, params):
+            key = product.get("template_id") or f"variant-{product['variant_id']}"
+            current = merged.get(key)
+            if current is None or product["score"] > current["score"]:
+                merged[key] = product
+    return sorted(merged.values(), key=lambda p: p["score"], reverse=True)[:params.limit]
+
 
 @router.post("/")
-def chat_interaction(request: ChatRequest, db: Session = Depends(get_db), auth: dict = Depends(validate_tenant_api_key)):
-    if not is_safe_user_input(request.message):
-        raise HTTPException(
-            status_code=400, 
-            detail="Message blocked by security policies (Possible prompt injection)."
-        )
+def chat_interaction(request: ChatRequest, db: Session = Depends(get_db),
+                     auth: dict = Depends(validate_tenant_api_key)):
+    message = request.message.strip()[:settings.CHAT_MAX_MESSAGE_CHARS]
+    if not message:
+        raise HTTPException(status_code=422, detail="Message is empty")
+    base_response = {"session_id": request.session_id, "products_referenced": []}
 
-    start_time = time.time()
-    
-    sql_company = text("""
-        SELECT system_prompt, selected_llm_model 
-        FROM user_companies 
-        WHERE user_id = :uid AND platform_company_id = :cid
-    """)
-    company = db.execute(sql_company, {"uid": auth["user_id"], "cid": request.company_id}).fetchone()
-    
-    if not company:
-        raise HTTPException(status_code=404, detail="Invalid Company ID")
-        
-    sql_global = text("SELECT supreme_system_prompt FROM global_settings WHERE id = 1")
-    global_config = db.execute(sql_global).fetchone()
-    supreme_prompt = global_config[0] if global_config and global_config[0] else "You are an AI assistant."
-    
-    vector = embedding_service.generate_vector(request.message)
-    context_products = search_similar_products(db, auth["user_id"], vector, company_id=request.company_id, limit=4)
-    
-    sql_hist = text("SELECT role, message FROM chat_history WHERE session_id = :sid ORDER BY created_at ASC LIMIT 6")
-    history = db.execute(sql_hist, {"sid": request.session_id}).fetchall()
-    
-    bot_response, tokens_used = generate_rag_response(
-        supreme_prompt=supreme_prompt,
-        tenant_prompt=company[0],
-        llm_model=company[1],
-        context_products=context_products,
-        chat_history=history,
-        user_message=request.message,
-        groq_api_key=auth["groq_api_key"]
-    )
-    
-    latency_ms = int((time.time() - start_time) * 1000)
-    
-    sql_insert = text("""
-        INSERT INTO chat_history (session_id, user_id, company_id, role, message, tokens_used, latency_ms) 
-        VALUES 
-        (:sid, :uid, :cid, 'user', :umsg, 0, 0), 
-        (:sid, :uid, :cid, 'assistant', :bmsg, :tokens, :lat)
-    """)
-    db.execute(sql_insert, {
-        "sid": request.session_id, 
-        "uid": auth["user_id"], 
-        "cid": request.company_id,
-        "umsg": request.message, 
-        "bmsg": bot_response,
-        "tokens": tokens_used,
-        "lat": latency_ms      
-    })
+    if is_prompt_injection(message):
+        log.warning("Blocked possible prompt injection (company=%s)", request.company_id)
+        return {**base_response, "reply": settings.CHAT_BLOCKED_MESSAGE, "blocked": True}
+
+    start = time.perf_counter()
+    user_id = auth["user_id"]
+    company = get_active_company(db, user_id, request.company_id)
+    history = load_history(db, user_id, request.company_id, request.session_id)
+
+    products = [] if is_small_talk(message) else retrieve_for_chat(db, user_id, request.company_id, message, history)
+    categories = company_categories(db, user_id, request.company_id)
+
+    try:
+        raw_reply, tokens_used = generate_rag_response(
+            supreme_prompt=auth.get("supreme_prompt"),
+            tenant_prompt=company["system_prompt"],
+            llm_model=company["llm_model"],
+            context_products=products,
+            chat_history=history,
+            user_message=message,
+            groq_api_key=auth.get("groq_api_key"),
+            categories=categories,
+        )
+    except LLMUnavailableError:
+        # No se guarda nada: el historial solo debe contener conversaciones reales.
+        return {**base_response, "reply": settings.CHAT_FALLBACK_MESSAGE, "error": "assistant_unavailable"}
+
+    reply, referenced = extract_references(raw_reply, products)
+    latency_ms = int((time.perf_counter() - start) * 1000)
+
+    db.execute(text("""
+        INSERT INTO chat_history (session_id, user_id, company_id, role, message, tokens_used, latency_ms)
+        VALUES (:sid, :uid, :cid, 'user', :umsg, 0, 0),
+               (:sid, :uid, :cid, 'assistant', :bmsg, :tokens, :lat)
+    """), {"sid": request.session_id, "uid": user_id, "cid": request.company_id,
+           "umsg": message, "bmsg": reply, "tokens": tokens_used, "lat": latency_ms})
     db.commit()
-    
-    return {
-        "reply": bot_response,
-        "products_referenced": context_products
-    }
+    log.info("chat company=%s products=%d referenced=%d latency_ms=%d",
+             request.company_id, len(products), len(referenced), latency_ms)
+
+    return {**base_response, "reply": reply, "products_referenced": [public_product(p) for p in referenced]}

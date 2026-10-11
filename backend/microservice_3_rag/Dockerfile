@@ -5,7 +5,8 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 
-ARG EMBEDDING_MODEL=all-MiniLM-L6-v2
+# Debe coincidir con MS1 y con config/settings.py (hay un test que lo verifica).
+ARG EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
 ENV EMBEDDING_MODEL=${EMBEDDING_MODEL}
 
 WORKDIR /app
