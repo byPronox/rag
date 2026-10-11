@@ -9,7 +9,7 @@ from services.pgvector_service import (
 )
 
 ROW = (1, 50, "SKU1", "Audífonos Pro", "desc", 15.5, "COP", 10, "Tecnologia", "https://p/1", "img.jpg", "7",
-       ["auriculares"], 0.61)
+       ["auriculares"], "img128.jpg", 0.61)
 WITH_004 = {"keywords": True, "trigram": True}
 WITHOUT_004 = {"keywords": False, "trigram": False}
 
@@ -31,9 +31,11 @@ def run_fetch(query="audifonos", filters=None, rows=(ROW,), features=WITH_004):
 
 
 def test_fetch_maps_rows():
-    empty = (2, None, None, "B", None, None, None, None, None, None, None, "global", None, 0.4)
-    result, _, _ = run_fetch(rows=[ROW, empty])
+    empty = (2, None, None, "B", None, None, None, None, None, None, None, "global", None, None, 0.4)
+    result, sql, _ = run_fetch(rows=[ROW, empty])
+    assert "image_128_url" in sql
     assert result[0]["name"] == "Audífonos Pro" and result[0]["keywords"] == ["auriculares"]
+    assert result[0]["image_128_url"] == "img128.jpg"
     assert result[0]["price"] == 15.5 and result[0]["stock"] == 10.0 and result[0]["similarity"] == 0.61
     assert result[1]["price"] == 0.0 and result[1]["stock"] == 0.0 and result[1]["keywords"] == []
 
@@ -108,9 +110,19 @@ def test_params_come_from_settings():
 
 
 def test_public_product_hides_internal_fields():
-    data = public_product({"variant_id": 1, "name": "A", "description": "x", "keywords": ["k"], "stock": 0})
+    data = public_product({"variant_id": 1, "name": "A ", "description": "x", "keywords": ["k"], "stock": 0,
+                           "image_url": "big.jpg"})
     assert "description" not in data and "keywords" not in data
     assert data["in_stock"] is False and data["price"] == 0.0
+    assert data["name"] == "A" and data["image_128_url"] == "big.jpg"   # sin miniatura usa la grande
+
+
+def test_public_product_with_detail_description():
+    data = public_product({"variant_id": 1, "name": "Blush", "image_128_url": "small.jpg",
+                           "description": "*• Realza tu maquillaje.* Muy práctico.\n*ESPECIFICACIONES:* Peso 5g"},
+                          with_description=True)
+    assert data["description"] == "Realza tu maquillaje. Muy práctico"
+    assert data["image_128_url"] == "small.jpg"
 
 
 def test_company_categories():

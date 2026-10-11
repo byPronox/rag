@@ -4,7 +4,7 @@ from sqlalchemy import text
 
 from config.settings import settings
 from services.ranking import RankingParams, rank_products
-from services.text_utils import content_tokens
+from services.text_utils import clean_description, content_tokens
 
 # Quita tildes en SQL sin depender de la extensión unaccent (mismo largo en ambas cadenas).
 _ACCENTED = "áàäâéèëêíìïîóòöôúùüûñ"
@@ -92,7 +92,7 @@ def fetch_candidates(db, user_id, company_id, query, query_vector, filters=None,
     keywords_column = "search_keywords" if features["keywords"] else "CAST(NULL AS text[])"
     columns = f"""
         variant_id, template_id, sku, display_name, description, price_included, currency, stock,
-        category, website_url, image_512_url, company_id, {keywords_column},
+        category, website_url, image_512_url, company_id, {keywords_column}, image_128_url,
         1 - (embedding <=> CAST(:vector AS vector)) AS similarity
     """
     sql = (f"(SELECT {columns} FROM product_embeddings WHERE {where} "
@@ -127,7 +127,8 @@ def fetch_candidates(db, user_id, company_id, query, query_vector, filters=None,
         "image_url": row[10],
         "company_id": row[11],
         "keywords": list(row[12] or []),
-        "similarity": float(row[13]),
+        "image_128_url": row[13],
+        "similarity": float(row[14]),
     } for row in rows]
 
 
@@ -136,22 +137,27 @@ def search_products(db, user_id, company_id, query, query_vector, params, filter
     return rank_products(query, candidates, params)
 
 
-def public_product(product):
-    """Campos que se exponen al widget/panel (sin descripción, keywords ni datos internos)."""
-    return {
+def public_product(product, with_description=False):
+    """Campos que se exponen al widget/panel (sin keywords ni datos internos). El chat pide además una
+    descripción limpia y corta para la vista de detalle del producto."""
+    data = {
         "variant_id": product["variant_id"],
         "sku": product.get("sku"),
-        "name": product["name"],
+        "name": (product.get("name") or "").strip(),
         "price": product.get("price", 0.0),
         "currency": product.get("currency"),
         "stock": product.get("stock", 0.0),
         "in_stock": (product.get("stock") or 0) > 0,
         "category": product.get("category"),
         "image_url": product.get("image_url"),
+        "image_128_url": product.get("image_128_url") or product.get("image_url"),
         "url": product.get("url"),
         "score": product.get("score"),
         "similarity": product.get("similarity"),
     }
+    if with_description:
+        data["description"] = clean_description(product.get("description"), settings.CHAT_DETAIL_DESCRIPTION_CHARS)
+    return data
 
 
 def company_categories(db, user_id, company_id, limit=30):

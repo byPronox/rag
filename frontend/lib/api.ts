@@ -418,9 +418,32 @@ export interface ChatMessagePayload {
   company_id: string;
 }
 
+// Producto recomendado por el asistente (tarjeta dentro del mensaje + vista de detalle)
+export interface RagProduct {
+  variant_id: number;
+  sku?: string | null;
+  name: string;
+  price: number;
+  currency?: string | null;
+  stock: number;
+  in_stock: boolean;
+  category?: string | null;
+  image_url?: string | null;
+  image_128_url?: string | null;
+  url?: string | null;
+  description?: string | null;
+}
+
 export interface RagChatResponse {
   reply?: string;
   answer?: string;
+  // Texto antes y después de la lista de productos (MS3 los separa con el marcador del LLM)
+  reply_before?: string;
+  reply_after?: string;
+  products_referenced?: RagProduct[];
+  session_id?: string;
+  blocked?: boolean;
+  error?: string;
 }
 
 export async function sendRagMessage(payload: ChatMessagePayload, apiKey: string): Promise<RagChatResponse> {
