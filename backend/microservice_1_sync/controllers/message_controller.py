@@ -66,8 +66,31 @@ def strip_html(text):
     return re.sub(r"\s+", " ", text).strip()
 
 
+def clean_description(raw, max_chars=None):
+    """Deja solo lo que describe el producto: sin HTML, sin asteriscos ni viñetas,
+    sin la ficha técnica y con un largo que el modelo alcance a leer completo."""
+    max_chars = max_chars or Config.EMBED_DESCRIPTION_CHARS
+    text = re.sub(r"<[^>]+>", " ", raw or "")
+    text = re.split(r"(?i)\b(especificaciones|specifications)\b", text, maxsplit=1)[0]
+    text = re.sub(r"[*•●▪◦_#`]+", " ", text)
+    text = re.sub(r"\s+", " ", text).strip(" .:-")
+    if len(text) > max_chars:
+        text = text[:max_chars].rsplit(" ", 1)[0]
+    return text
+
+
 def build_embedding_text(data, clean_name):
-    """Texto que se convierte en vector. v1 = formato original (no cambiar: hay test de regresión)."""
+    """Texto que se convierte en vector. v1 = formato original (no cambiar: hay test de regresión).
+    v3 = nombre + categoría + descripción limpia y corta (recomendado con modelos multilingües)."""
+    if Config.EMBED_TEXT_VERSION == "v3":
+        parts = [f"{clean_name}."]
+        if data.get('category'):
+            parts.append(f"{data['category']}.")
+        description = clean_description(data.get('description'))
+        if description and description.lower() != clean_name.lower():
+            parts.append(f"{description}.")
+        return " ".join(parts)
+
     if Config.EMBED_TEXT_VERSION == "v2":
         parts = [
             f"Product: {clean_name}.",

@@ -8,7 +8,7 @@ class Settings:
         DATABASE_URL = _raw_db_url
         
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-    EMBEDDING_MODEL = "all-MiniLM-L6-v2"
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
     
     urls_crudas = os.getenv("FRONTEND_URLS", "")
     FRONTEND_URLS = [url.strip() for url in urls_crudas.split(",") if url.strip()]

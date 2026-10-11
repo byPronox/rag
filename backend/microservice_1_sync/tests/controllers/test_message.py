@@ -638,3 +638,23 @@ def test_circuit_breaker_se_reinicia_con_exito(mock_post, _mock_safe):
     mock_post.return_value.status_code = 200
     send_feedback_to_odoo("https://odoo-ok.test/api/rag/feedback", 1, "fallo")
     assert "https://odoo-ok.test/api/rag/feedback" not in mc._webhook_breaker
+
+def test_texto_v3_limpia_markup_y_ficha_tecnica():
+    data = {
+        "category": "Oficina",
+        "description": ("*• Iluminación RGB:* lámpara de 358 colores.\n\n"
+                        "*ESPECIFICACIONES:*\nLongitud: 129.54cm.\nVataje máximo: 20 Vatios."),
+    }
+    with patch.object(mc.Config, "EMBED_TEXT_VERSION", "v3"):
+        texto = build_embedding_text(data, "Lámpara de pie LED")
+    assert texto == "Lámpara de pie LED. Oficina. Iluminación RGB: lámpara de 358 colores."
+    assert "*" not in texto and "•" not in texto
+    assert "Vataje" not in texto and "USD" not in texto
+
+
+def test_texto_v3_corta_descripciones_largas():
+    data = {"description": "palabra " * 200}
+    with patch.object(mc.Config, "EMBED_TEXT_VERSION", "v3"), \
+         patch.object(mc.Config, "EMBED_DESCRIPTION_CHARS", 100):
+        texto = build_embedding_text(data, "Producto")
+    assert len(texto) <= len("Producto. ") + 100 + 1

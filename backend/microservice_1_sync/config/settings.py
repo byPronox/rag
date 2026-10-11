@@ -25,8 +25,9 @@ class Config:
     PREFETCH_COUNT = int(os.getenv("RABBITMQ_PREFETCH", "1"))
 
     # --- Modelo de IA (MS1 y MS3 deben usar el mismo) ---
-    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "all-MiniLM-L6-v2")
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "paraphrase-multilingual-MiniLM-L12-v2")
     EMBED_TEXT_VERSION = os.getenv("EMBED_TEXT_VERSION", "v1")
+    EMBED_DESCRIPTION_CHARS = int(os.getenv("EMBED_DESCRIPTION_CHARS", "350"))
 
     # --- Webhook hacia Odoo ---
     ALLOW_PRIVATE_WEBHOOKS = os.getenv("ALLOW_PRIVATE_WEBHOOKS", "false").lower() == "true"
