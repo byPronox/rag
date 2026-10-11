@@ -5,17 +5,23 @@ from config.settings import Config
 _connection = None
 
 
+def new_db_connection():
+    """Conexión nueva e independiente (la usa el hilo de enriquecimiento de keywords)."""
+    connection = psycopg2.connect(
+        Config.DATABASE_URL,
+        connect_timeout=10,
+        keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=3,
+    )
+    register_vector(connection)
+    return connection
+
+
 def get_db_connection():
     """Conexión persistente: el worker procesa un mensaje a la vez, así que reutiliza una sola
     conexión en lugar de abrir una por mensaje (con TLS hacia Railway cuesta decenas de ms)."""
     global _connection  # pylint: disable=global-statement
     if _connection is None or _connection.closed:
-        _connection = psycopg2.connect(
-            Config.DATABASE_URL,
-            connect_timeout=10,
-            keepalives=1, keepalives_idle=30, keepalives_interval=10, keepalives_count=3,
-        )
-        register_vector(_connection)
+        _connection = new_db_connection()
     return _connection
 
 

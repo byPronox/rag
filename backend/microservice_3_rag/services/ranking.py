@@ -10,23 +10,24 @@ class RankingParams:
     min_similarity: float          # piso de similitud coseno para aceptar un producto solo por semántica
     relative_margin: float         # además, su similitud no puede quedar a más de este margen de la mejor
     limit: int
-    name_weight: float = 0.15      # bono si las palabras de la consulta aparecen en el nombre
+    name_weight: float = 0.30      # bono si las palabras de la consulta aparecen en el nombre
     category_weight: float = 0.10  # bono si la consulta nombra la categoría (ej. "tecnologia")
+    keyword_weight: float = 0.30   # bono si aparecen en las keywords (sinónimos/traducciones del LLM)
     out_of_stock_penalty: float = 0.05
-    strong_ratio: float = 0.6  # si el nombre o la categoría cubren esta fracción de la consulta, se acepta siempre
+    strong_ratio: float = 0.6      # si nombre, categoría o keywords cubren esta fracción, se acepta siempre
+    fuzzy: bool = True             # tolera errores de tipeo ("audifnos", "cosina")
 
 
-def coverage(query_tokens, text):
+def coverage(query_tokens, text_tokens, fuzzy=False):
     """Fracción de las palabras de la consulta que aparecen en el texto (0..1)."""
-    if not query_tokens:
+    if not query_tokens or not text_tokens:
         return 0.0
-    text_tokens = content_tokens(text)
-    hits = sum(1 for q in query_tokens if any(tokens_match(q, t) for t in text_tokens))
+    hits = sum(1 for q in query_tokens if any(tokens_match(q, t, fuzzy) for t in text_tokens))
     return hits / len(query_tokens)
 
 
 def rank_products(query, candidates, params):
-    """candidates: dicts con similarity, name, category, stock, template_id, variant_id.
+    """candidates: dicts con similarity, name, category, keywords, stock, template_id, variant_id.
     Devuelve los aceptados (con 'score' y 'similarity'), una variante por plantilla, ordenados."""
     if not candidates:
         return []
@@ -36,14 +37,18 @@ def rank_products(query, candidates, params):
     scored = []
     for product in candidates:
         similarity = float(product["similarity"])
-        name_ratio = coverage(query_tokens, product.get("name"))
-        category_ratio = coverage(query_tokens, product.get("category"))
-        # Una palabra suelta ("pets", "recargable") no basta: el nombre o la categoría deben cubrir
-        # la mayor parte de la consulta ("tecnologia", "cama para mi perro").
-        strong_lexical = max(name_ratio, category_ratio) >= params.strong_ratio
+        name_ratio = coverage(query_tokens, content_tokens(product.get("name")), params.fuzzy)
+        category_ratio = coverage(query_tokens, content_tokens(product.get("category")), params.fuzzy)
+        keyword_ratio = coverage(query_tokens, content_tokens(" ".join(product.get("keywords") or [])),
+                                 params.fuzzy)
+        # Una palabra suelta ("pets", "recargable") no basta: nombre, categoría o keywords deben cubrir
+        # la mayor parte de la consulta ("tecnologia", "cama para mi perro", "basurero").
+        strong_lexical = max(name_ratio, category_ratio, keyword_ratio) >= params.strong_ratio
         if similarity < semantic_floor and not strong_lexical:
             continue
-        score = similarity + params.name_weight * name_ratio + params.category_weight * category_ratio
+        # Bono cuadrático: coincidir con toda la consulta pesa mucho; con una palabra de cuatro, casi nada.
+        score = (similarity + params.name_weight * name_ratio ** 2
+                 + params.category_weight * category_ratio ** 2 + params.keyword_weight * keyword_ratio ** 2)
         if (product.get("stock") or 0) <= 0:
             score -= params.out_of_stock_penalty
         scored.append({**product, "similarity": round(similarity, 4), "score": round(score, 4)})
