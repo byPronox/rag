@@ -11,7 +11,7 @@ from config.settings import settings
 from database.connection import get_db
 from services.embedding_service import embedding_service
 from services.intent import is_follow_up, is_small_talk
-from services.llm_service import LLMUnavailableError, extract_references, generate_rag_response
+from services.llm_service import LLMUnavailableError, compose_reply, generate_rag_response
 from services.pgvector_service import chat_params, company_categories, public_product, search_products
 from services.prompt_guard import is_prompt_injection
 
@@ -101,7 +101,8 @@ def chat_interaction(request: ChatRequest, db: Session = Depends(get_db),
         # No se guarda nada: el historial solo debe contener conversaciones reales.
         return {**base_response, "reply": settings.CHAT_FALLBACK_MESSAGE, "error": "assistant_unavailable"}
 
-    reply, referenced = extract_references(raw_reply, products)
+    composed = compose_reply(raw_reply, products)
+    reply, referenced = composed["plain"], composed["products"]
     latency_ms = int((time.perf_counter() - start) * 1000)
 
     db.execute(text("""
@@ -114,4 +115,12 @@ def chat_interaction(request: ChatRequest, db: Session = Depends(get_db),
     log.info("chat company=%s products=%d referenced=%d latency_ms=%d",
              request.company_id, len(products), len(referenced), latency_ms)
 
-    return {**base_response, "reply": reply, "products_referenced": [public_product(p) for p in referenced]}
+    # `reply` (texto completo) mantiene compatibles a los widgets que no pintan tarjetas;
+    # reply_before / products_referenced / reply_after permiten mostrar la lista dentro del mensaje.
+    return {
+        **base_response,
+        "reply": reply,
+        "reply_before": composed["before"],
+        "reply_after": composed["after"],
+        "products_referenced": [public_product(p, with_description=True) for p in referenced],
+    }

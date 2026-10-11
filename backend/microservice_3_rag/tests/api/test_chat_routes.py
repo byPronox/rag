@@ -47,6 +47,17 @@ def test_chat_success_cites_products_and_saves_history(test_client, mock_db_sess
     mock_db_session.commit.assert_called_once()
 
 
+def test_chat_returns_text_around_product_cards(test_client, mock_db_session, setup):
+    setup["llm"].return_value = ("¡Claro! Mira estos:\n[[PRODUCTS: P1]]\n¿Te ayudo con algo más?", 90)
+    data = post(test_client).json()
+    assert data["reply_before"] == "¡Claro! Mira estos:"
+    assert data["reply_after"] == "¿Te ayudo con algo más?"
+    assert data["reply"] == "¡Claro! Mira estos:\nRedmi Buds\n¿Te ayudo con algo más?"
+    card = data["products_referenced"][0]
+    assert card["name"] == "Redmi Buds" and card["description"] == "x" and "image_128_url" in card
+    assert mock_db_session.execute.call_args.args[1]["bmsg"] == data["reply"]
+
+
 def test_small_talk_skips_catalog_search(test_client, setup):
     setup["llm"].return_value = ("¡Hola! ¿Qué buscas?", 20)
     response = post(test_client, message="hola, buenas tardes")

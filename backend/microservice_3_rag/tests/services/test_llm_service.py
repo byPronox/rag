@@ -3,8 +3,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from services.llm_service import (
-    DEFAULT_SUPREME_PROMPT, LLM_SECURITY_REMINDER, LLMUnavailableError, build_catalog_context,
-    build_messages, extract_references, generate_rag_response,
+    DEFAULT_SUPREME_PROMPT, LLM_SECURITY_REMINDER, RESPONSE_RULES, LLMUnavailableError, build_catalog_context,
+    build_messages, compose_reply, extract_references, generate_rag_response,
 )
 
 PRODUCTS = [
@@ -109,3 +109,35 @@ def test_extract_references_by_name_when_no_tags():
 def test_extract_references_none():
     _, cited = extract_references("No tenemos bicicletas.", PRODUCTS)
     assert cited == []
+
+
+def test_compose_reply_splits_text_around_product_cards():
+    raw = "¡Sí! Te recomiendo estos para tu música:\n[[PRODUCTS: P2, P1, P9, P2]]\n¿Buscas algo inalámbrico?"
+    result = compose_reply(raw, PRODUCTS)
+    assert result["before"] == "¡Sí! Te recomiendo estos para tu música:"
+    assert result["after"] == "¿Buscas algo inalámbrico?"
+    assert [p["variant_id"] for p in result["products"]] == [2, 1]          # orden del marcador, sin repetidos
+    assert result["plain"] == ("¡Sí! Te recomiendo estos para tu música:\nRedmi Buds, Hyundai Audifonos\n"
+                               "¿Buscas algo inalámbrico?")                 # historial con nombres reales
+
+
+def test_compose_reply_marker_variants_and_tags_inside_text():
+    result = compose_reply("Mira el Redmi Buds [P2]: [[products P1]]", PRODUCTS)
+    assert result["before"] == "Mira el Redmi Buds:"
+    assert [p["variant_id"] for p in result["products"]] == [1]
+
+
+def test_compose_reply_empty_marker_falls_back_to_cited_products():
+    result = compose_reply("Te sirve el Redmi Buds [P2] [[PRODUCTS: ]] o el Redmi Buds [P2].", PRODUCTS)
+    assert [p["variant_id"] for p in result["products"]] == [2]
+    assert result["after"] == "o el Redmi Buds."
+
+
+def test_compose_reply_without_marker_keeps_previous_behaviour():
+    result = compose_reply("Te recomiendo Redmi Buds [P2].", PRODUCTS)
+    assert result == {"before": "Te recomiendo Redmi Buds.", "after": "", "products": [PRODUCTS[1]],
+                      "plain": "Te recomiendo Redmi Buds."}
+
+
+def test_response_rules_explain_marker():
+    assert "[[PRODUCTS: P1, P3]]" in RESPONSE_RULES
