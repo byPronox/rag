@@ -29,6 +29,19 @@ class Config:
     EMBED_TEXT_VERSION = os.getenv("EMBED_TEXT_VERSION", "v1")
     EMBED_DESCRIPTION_CHARS = int(os.getenv("EMBED_DESCRIPTION_CHARS", "350"))
 
+    # --- Palabras clave por producto (document expansion con el LLM de Groq) ---
+    # La API key se lee de global_settings (la misma del chat); GROQ_API_KEY es solo respaldo.
+    KEYWORDS_ENABLED = os.getenv("KEYWORDS_ENABLED", "true").lower() == "true"
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+    KEYWORDS_LLM_MODEL = os.getenv("KEYWORDS_LLM_MODEL", "openai/gpt-oss-120b")
+    KEYWORDS_BATCH_SIZE = int(os.getenv("KEYWORDS_BATCH_SIZE", "8"))          # productos por llamada
+    # 1 lote cada 30 s (~2 llamadas/min) cabe en los límites por minuto del plan gratuito de Groq.
+    KEYWORDS_BATCHES_PER_CYCLE = int(os.getenv("KEYWORDS_BATCHES_PER_CYCLE", "1"))
+    KEYWORDS_INTERVAL_SECONDS = int(os.getenv("KEYWORDS_INTERVAL_SECONDS", "30"))
+    KEYWORDS_MAX_ATTEMPTS = int(os.getenv("KEYWORDS_MAX_ATTEMPTS", "3"))
+    KEYWORDS_MAX_PER_PRODUCT = int(os.getenv("KEYWORDS_MAX_PER_PRODUCT", "15"))
+    KEYWORDS_TIMEOUT_SECONDS = float(os.getenv("KEYWORDS_TIMEOUT_SECONDS", "60"))
+
     # --- Webhook hacia Odoo ---
     ALLOW_PRIVATE_WEBHOOKS = os.getenv("ALLOW_PRIVATE_WEBHOOKS", "false").lower() == "true"
     FEEDBACK_DEDUPE_SECONDS = int(os.getenv("FEEDBACK_DEDUPE_SECONDS", "600"))

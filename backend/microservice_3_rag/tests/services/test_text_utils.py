@@ -1,4 +1,6 @@
-from services.text_utils import clean_description, content_tokens, normalize_text, stem, tokens_match
+from services.text_utils import (
+    clean_description, content_tokens, levenshtein, normalize_text, stem, tokens_match,
+)
 
 
 def test_normalize_text_removes_accents_and_symbols():
@@ -21,6 +23,20 @@ def test_tokens_match_tolerates_one_letter_only():
     assert tokens_match("audifono", "audifono")
     assert not tokens_match("cama", "camara")
     assert not tokens_match("gps", "gpsx1")
+
+
+def test_tokens_match_fuzzy_by_length():
+    assert tokens_match("audifno", "audifono", fuzzy=True)      # 1 error en palabra de 7 letras
+    assert tokens_match("tecnolgia", "tecnologia", fuzzy=True)  # palabras largas toleran 2
+    assert tokens_match("cosina", "cocina", fuzzy=True)
+    assert not tokens_match("gato", "pato", fuzzy=True)         # palabras cortas: exacto
+    assert not tokens_match("lampara", "mascota", fuzzy=True)
+
+
+def test_levenshtein_cuts_early():
+    assert levenshtein("cocina", "cosina", 1) == 1
+    assert levenshtein("a", "abcdef", 2) == 3
+    assert levenshtein("abcdef", "uvwxyz", 1) == 2
 
 
 def test_clean_description_strips_markup_and_specs():

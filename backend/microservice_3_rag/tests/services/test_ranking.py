@@ -4,9 +4,9 @@ from services.text_utils import content_tokens
 PARAMS = RankingParams(min_similarity=0.35, relative_margin=0.10, limit=5)
 
 
-def product(variant_id, similarity, name="Producto", category="Varios", stock=10, template_id=None):
+def product(variant_id, similarity, name="Producto", category="Varios", stock=10, template_id=None, keywords=None):
     return {"variant_id": variant_id, "template_id": template_id or variant_id, "name": name,
-            "category": category, "stock": stock, "similarity": similarity}
+            "category": category, "stock": stock, "similarity": similarity, "keywords": keywords or []}
 
 
 def ids(results):
@@ -82,6 +82,37 @@ def test_limit_and_scores_are_rounded():
 
 def test_coverage():
     tokens = content_tokens("cama para mi perro")
-    assert coverage(tokens, "Cama ortopédica para perros (Gris)") == 1.0
-    assert coverage(tokens, "Set juegos para perros") == 0.5
-    assert coverage([], "algo") == 0.0
+    assert coverage(tokens, content_tokens("Cama ortopédica para perros (Gris)")) == 1.0
+    assert coverage(tokens, content_tokens("Set juegos para perros")) == 0.5
+    assert coverage([], ["algo"]) == 0.0
+    assert coverage(content_tokens("audifnos"), content_tokens("Audífonos Redmi"), fuzzy=True) == 1.0
+    assert coverage(content_tokens("audifnos"), content_tokens("Audífonos Redmi"), fuzzy=False) == 0.0
+
+
+def test_regression_synonym_found_through_keywords():
+    # Defecto: "basurero" devolvía vacío porque el catálogo dice "Cubo de basura".
+    candidates = [product(1, 0.21, "Cubo de basura con sensor", "Oficina", keywords=["basurero", "papelera"]),
+                  product(2, 0.30, "Labial en polvo", "Belleza", keywords=["pintalabios"])]
+    assert ids(rank_products("basurero", candidates, PARAMS)) == [1]
+
+
+def test_regression_spanish_query_on_english_catalog():
+    # Defecto: "arenero" en la tienda de EE. UU. (catálogo en inglés) devolvía vacío.
+    candidates = [product(1, 0.20, "Smart Litter Box", "Litter Boxes", keywords=["arenero", "litter box"]),
+                  product(2, 0.25, "Pet Hydration Station", "Automatic Watering", keywords=["fuente de agua"])]
+    assert ids(rank_products("arenero", candidates, PARAMS)) == [1]
+
+
+def test_regression_typo_tolerance():
+    candidates = [product(1, 0.30, "Audífonos Inalámbricos Redmi", "Tecnologia"),
+                  product(2, 0.31, "Arenero inteligente", "Gatos")]
+    assert ids(rank_products("audifnos", candidates, PARAMS)) == [1]
+    no_fuzzy = RankingParams(min_similarity=0.35, relative_margin=0.10, limit=5, fuzzy=False)
+    assert rank_products("audifnos", candidates, no_fuzzy) == []
+
+
+def test_exact_keyword_match_beats_semantic_noise():
+    # "sacacorchos": el destapador coincide por keyword y debe ganarle a un rascador parecido por ruido.
+    candidates = [product(1, 0.45, "Rascador MichiNido", "Mascotas"),
+                  product(2, 0.29, "Destapador de vinos electrico", "Cocina", keywords=["sacacorchos electrico"])]
+    assert ids(rank_products("sacacorchos", candidates, PARAMS))[0] == 2

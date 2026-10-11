@@ -43,11 +43,36 @@ def content_tokens(text):
     return [stem(t) for t in normalize_text(text).split() if t not in STOPWORDS and len(t) > 1]
 
 
-def tokens_match(query_token, product_token):
+def levenshtein(a, b, limit):
+    """Distancia de edición con corte temprano: devuelve limit + 1 si se pasa del límite."""
+    if abs(len(a) - len(b)) > limit:
+        return limit + 1
+    previous = list(range(len(b) + 1))
+    for i, char_a in enumerate(a, 1):
+        current = [i]
+        for j, char_b in enumerate(b, 1):
+            current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (char_a != char_b)))
+        if min(current) > limit:
+            return limit + 1
+        previous = current
+    return previous[-1]
+
+
+def typo_tolerance(token):
+    """Errores de tipeo permitidos según el largo: palabras cortas deben coincidir exacto."""
+    if len(token) >= 8:
+        return 2
+    return 1 if len(token) >= 5 else 0
+
+
+def tokens_match(query_token, product_token, fuzzy=False):
     if query_token == product_token:
         return True
     short, long_ = sorted((query_token, product_token), key=len)
-    return len(short) >= 4 and long_.startswith(short) and len(long_) - len(short) <= 1
+    if len(short) >= 4 and long_.startswith(short) and len(long_) - len(short) <= 1:
+        return True
+    limit = typo_tolerance(query_token) if fuzzy else 0
+    return limit > 0 and levenshtein(query_token, product_token, limit) <= limit
 
 
 def clean_description(raw, max_chars=200):

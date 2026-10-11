@@ -16,4 +16,9 @@ if __name__ == '__main__':
     )
     signal.signal(signal.SIGTERM, _handle_sigterm)
     logging.getLogger("sync").info("Starting RAG Synchronization Microservice...")
-    start_worker()
+    from services.keyword_enrichment import start_background_enrichment
+    stop_enrichment = start_background_enrichment()
+    try:
+        start_worker()
+    finally:
+        stop_enrichment.set()

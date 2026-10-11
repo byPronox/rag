@@ -29,9 +29,12 @@ class Settings:
     SEARCH_DEFAULT_LIMIT = _int("SEARCH_DEFAULT_LIMIT", "5")
     SEARCH_MAX_LIMIT = _int("SEARCH_MAX_LIMIT", "20")
     SEARCH_CANDIDATES = _int("SEARCH_CANDIDATES", "50")
-    SEARCH_NAME_WEIGHT = _float("SEARCH_NAME_WEIGHT", "0.15")
+    SEARCH_NAME_WEIGHT = _float("SEARCH_NAME_WEIGHT", "0.30")
     SEARCH_CATEGORY_WEIGHT = _float("SEARCH_CATEGORY_WEIGHT", "0.10")
+    SEARCH_KEYWORD_WEIGHT = _float("SEARCH_KEYWORD_WEIGHT", "0.30")
     SEARCH_OUT_OF_STOCK_PENALTY = _float("SEARCH_OUT_OF_STOCK_PENALTY", "0.05")
+    # Similitud de trigramas (pg_trgm) para traer candidatos con errores de tipeo; el ranking los confirma.
+    SEARCH_FUZZY_THRESHOLD = _float("SEARCH_FUZZY_THRESHOLD", "0.5")
 
     # Chat
     CHAT_MIN_SIMILARITY = _float("CHAT_MIN_SIMILARITY", "0.35")

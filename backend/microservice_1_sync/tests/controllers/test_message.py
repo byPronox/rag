@@ -75,20 +75,23 @@ def test_eliminar_producto(mock_vector, mock_get_db, mock_rabbitmq_channel):
 @patch('controllers.message_controller.embedding_service.generate_vector')
 def test_producto_nuevo_se_vectoriza_y_guarda_hash(mock_vector, mock_get_db, mock_rabbitmq_channel):
     channel, method = mock_rabbitmq_channel
-    # 1) auth -> tenant 99   2) compañía existe   3) no hay hash previo
-    mock_conn, mock_cursor = _preparar_db(mock_get_db, [(99,), (1,), None])
+    # 1) auth -> tenant 99   2) compañía existe   3) no hay fila previa   4) sin keywords reutilizables
+    mock_conn, mock_cursor = _preparar_db(mock_get_db, [(99,), (1,), None, None])
     mock_vector.return_value = [0.5, 0.5]
 
     process_product_message(channel, method, None, json.dumps(PRODUCTO))
 
-    assert mock_cursor.execute.call_count == 4
-    sql, params = mock_cursor.execute.call_args_list[3][0]
+    assert mock_cursor.execute.call_count == 5
+    sql, params = mock_cursor.execute.call_args_list[4][0]
     assert "INSERT INTO product_embeddings" in sql
     assert params[0] == 123
     assert params[1] == 99
     assert params[3] == "Product Name"
     assert params[19] == [0.5, 0.5]
     assert len(params[20]) == 64  # sha256 hex
+    assert params[23] is None              # keywords pendientes (las genera el hilo de enriquecimiento)
+    assert len(params[24]) == 64           # keywords_source_hash
+    assert params[25] == "product name"    # search_text normalizado
     mock_conn.commit.assert_called_once()
     channel.basic_ack.assert_called_once()
 
@@ -99,7 +102,7 @@ def test_texto_sin_cambios_no_revectoriza(mock_vector, mock_get_db, mock_rabbitm
     channel, method = mock_rabbitmq_channel
     texto = build_embedding_text(PRODUCTO, "Product Name")
     hash_actual = mc.compute_content_hash(texto)
-    _, mock_cursor = _preparar_db(mock_get_db, [(99,), (1,), (hash_actual,)])
+    _, mock_cursor = _preparar_db(mock_get_db, [(99,), (1,), (hash_actual, None, None), None])
 
     process_product_message(channel, method, None, json.dumps(PRODUCTO))
 
@@ -296,14 +299,14 @@ def test_feedback_a_url_insegura_no_se_envia(mock_post, _mock_safe):
 @patch('controllers.message_controller.embedding_service.generate_vector')
 def test_producto_sin_compania_se_guarda_como_global(mock_vector, mock_get_db, mock_rabbitmq_channel):
     channel, method = mock_rabbitmq_channel
-    _, mock_cursor = _preparar_db(mock_get_db, [(99,), None])
+    _, mock_cursor = _preparar_db(mock_get_db, [(99,), None, None])
     mock_vector.return_value = [0.1]
     payload = {**PRODUCTO, "company_id": "global", "company_name": "All Companies"}
 
     process_product_message(channel, method, None, json.dumps(payload))
 
-    assert mock_cursor.execute.call_count == 3
-    params = mock_cursor.execute.call_args_list[2][0][1]
+    assert mock_cursor.execute.call_count == 4
+    params = mock_cursor.execute.call_args_list[3][0][1]
     assert params[15] == "global"
     channel.basic_ack.assert_called_once()
 
@@ -349,7 +352,7 @@ def test_cambio_de_modelo_obliga_a_revectorizar(mock_vector, mock_get_db, mock_r
     texto = build_embedding_text(PRODUCTO, "Product Name")
     with patch.object(mc.Config, "EMBEDDING_MODEL", "modelo-viejo"):
         hash_viejo = mc.compute_content_hash(texto)
-    _, mock_cursor = _preparar_db(mock_get_db, [(99,), (1,), (hash_viejo,)])
+    _, mock_cursor = _preparar_db(mock_get_db, [(99,), (1,), (hash_viejo, None, None), None])
     mock_vector.return_value = [0.3]
 
     with patch.object(mc.Config, "EMBEDDING_MODEL", "modelo-nuevo"):
@@ -397,17 +400,17 @@ def test_evento_nuevo_registra_version_y_se_aplica(mock_vector, mock_get_db, moc
     channel, method = mock_rabbitmq_channel
     ts = 1700000000000000
     # auth, versión aceptada, compañía registrada, sin hash previo
-    mock_conn, mock_cursor = _preparar_db(mock_get_db, [(99,), (ts,), (1,), None])
+    mock_conn, mock_cursor = _preparar_db(mock_get_db, [(99,), (ts,), (1,), None, None])
     mock_vector.return_value = [0.5]
     payload = {**PRODUCTO, "event_ts": ts}
 
     process_product_message(channel, method, None, json.dumps(payload))
 
-    assert mock_cursor.execute.call_count == 5
+    assert mock_cursor.execute.call_count == 6
     sql_version, params_version = mock_cursor.execute.call_args_list[1][0]
     assert "product_sync_versions" in sql_version
     assert params_version == (99, 123, ts)
-    assert "INSERT INTO product_embeddings" in mock_cursor.execute.call_args_list[4][0][0]
+    assert "INSERT INTO product_embeddings" in mock_cursor.execute.call_args_list[5][0][0]
     mock_vector.assert_called_once()
     mock_conn.commit.assert_called_once()
 
@@ -605,8 +608,8 @@ def test_payloads_validos_de_odoo_pasan():
 @patch('controllers.message_controller.embedding_service.generate_vector')
 def test_compania_nueva_se_registra(mock_vector, mock_get_db, mock_rabbitmq_channel):
     channel, method = mock_rabbitmq_channel
-    # auth, compañía no existe, sin hash previo
-    _, mock_cursor = _preparar_db(mock_get_db, [(99,), None, None])
+    # auth, compañía no existe, sin fila previa, sin keywords reutilizables
+    _, mock_cursor = _preparar_db(mock_get_db, [(99,), None, None, None])
     mock_vector.return_value = [0.1]
 
     process_product_message(channel, method, None, json.dumps(PRODUCTO))

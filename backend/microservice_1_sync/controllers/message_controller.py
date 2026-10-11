@@ -6,6 +6,7 @@ import logging
 import re
 import socket
 import time
+import unicodedata
 from urllib.parse import urlparse
 
 import pika
@@ -79,13 +80,41 @@ def clean_description(raw, max_chars=None):
     return text
 
 
-def build_embedding_text(data, clean_name):
+def normalize_search_text(text):
+    """Igual que text_utils.normalize_text de MS3: minúsculas, sin tildes ni símbolos."""
+    decomposed = unicodedata.normalize("NFKD", text or "")
+    plain = "".join(ch for ch in decomposed if not unicodedata.combining(ch)).lower()
+    return re.sub(r"[^a-z0-9]+", " ", plain).strip()
+
+
+def build_search_text(clean_name, category, keywords=None):
+    """Lo que recorre la búsqueda léxica de MS3 (columna search_text, índice de trigramas)."""
+    return normalize_search_text(" ".join([clean_name or "", category or "", *(keywords or [])]))
+
+
+def keywords_base_name(clean_name):
+    """'Cama ortopédica (Verde)' -> 'Cama ortopédica': las variantes de una plantilla comparten keywords."""
+    return re.sub(r"\s*\([^()]*\)\s*$", "", clean_name or "").strip()
+
+
+def compute_keywords_source_hash(clean_name, category, description):
+    """Las palabras clave dependen solo de nombre base, categoría y descripción: si no cambian se reutilizan
+    (un cambio de precio o stock, o una variante nueva de la misma plantilla, no vuelve a llamar al LLM)."""
+    key = f"{keywords_base_name(clean_name)}|{category or ''}|{clean_description(description, 400)}"
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()
+
+
+def build_embedding_text(data, clean_name, keywords=None):
     """Texto que se convierte en vector. v1 = formato original (no cambiar: hay test de regresión).
-    v3 = nombre + categoría + descripción limpia y corta (recomendado con modelos multilingües)."""
-    if Config.EMBED_TEXT_VERSION == "v3":
+    v3 = nombre + categoría + descripción limpia y corta (recomendado con modelos multilingües).
+    v4 = v3 + palabras clave (sinónimos/traducciones) ANTES de la descripción, para que el modelo
+    (lee ~128 tokens) no las corte."""
+    if Config.EMBED_TEXT_VERSION in ("v3", "v4"):
         parts = [f"{clean_name}."]
         if data.get('category'):
             parts.append(f"{data['category']}.")
+        if Config.EMBED_TEXT_VERSION == "v4" and keywords:
+            parts.append(", ".join(keywords) + ".")
         description = clean_description(data.get('description'))
         if description and description.lower() != clean_name.lower():
             parts.append(f"{description}.")
@@ -320,9 +349,8 @@ def _upsert_product(cur, user_id, data):
     if not clean_name:
         raise PermanentError("display_name is empty")
 
-    text_to_embed = build_embedding_text(data, clean_name)
-    content_hash = compute_content_hash(text_to_embed)
     template_id = normalize_template_id(data.get('template_id'))
+    keywords_hash = compute_keywords_source_hash(clean_name, data.get('category'), data.get('description'))
 
     structured = (
         data.get('sku'), clean_name, data.get('description'),
@@ -333,9 +361,19 @@ def _upsert_product(cur, user_id, data):
         data.get('accessories') or '', data.get('alternatives') or '',
     )
 
-    cur.execute("SELECT content_hash FROM product_embeddings WHERE variant_id = %s AND user_id = %s",
-                (variant_id, user_id))
+    cur.execute("""
+        SELECT content_hash, search_keywords, keywords_source_hash FROM product_embeddings
+        WHERE variant_id = %s AND user_id = %s
+    """, (variant_id, user_id))
     existing = cur.fetchone()
+
+    # El consumidor nunca llama al LLM: reutiliza keywords vigentes o deja el producto pendiente
+    # para el enriquecimiento en segundo plano (services/keyword_enrichment.py).
+    keywords = _reusable_keywords(cur, user_id, existing, keywords_hash)
+    text_to_embed = build_embedding_text(data, clean_name, keywords)
+    content_hash = compute_content_hash(text_to_embed)
+    search_text = build_search_text(clean_name, data.get('category'), keywords)
+    keyword_columns = (keywords, keywords_hash, search_text)
 
     if existing and existing[0] == content_hash:
         cur.execute("""
@@ -345,9 +383,9 @@ def _upsert_product(cur, user_id, data):
                 stock = %s, category = %s, website_url = %s,
                 image_128_url = %s, image_512_url = %s, image_1920_url = %s,
                 company_id = %s, company_name = %s, accessories = %s, alternatives = %s,
-                template_id = %s
+                template_id = %s, search_keywords = %s, keywords_source_hash = %s, search_text = %s
             WHERE variant_id = %s AND user_id = %s
-        """, (*structured, template_id, variant_id, user_id))
+        """, (*structured, template_id, *keyword_columns, variant_id, user_id))
         log.info("Variant %s updated (embedding reused, text and model unchanged).", variant_id)
         return
 
@@ -360,11 +398,12 @@ def _upsert_product(cur, user_id, data):
             price_excluded, price_included, tax_percent, currency,
             stock, category, website_url, image_128_url, image_512_url, image_1920_url,
             company_id, company_name, accessories, alternatives,
-            embedding, content_hash, template_id, embedding_model
+            embedding, content_hash, template_id, embedding_model,
+            search_keywords, keywords_source_hash, search_text
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s)
+                %s, %s, %s, %s, %s, %s)
         ON CONFLICT (variant_id, user_id) DO UPDATE SET
             sku = EXCLUDED.sku,
             display_name = EXCLUDED.display_name,
@@ -386,10 +425,31 @@ def _upsert_product(cur, user_id, data):
             embedding = EXCLUDED.embedding,
             content_hash = EXCLUDED.content_hash,
             template_id = EXCLUDED.template_id,
-            embedding_model = EXCLUDED.embedding_model;
-    """, (variant_id, user_id, *structured, vector, content_hash, template_id, Config.EMBEDDING_MODEL))
-    log.info("Variant %s (template %s) embedded with %s in %.0f ms and saved securely.",
-             variant_id, template_id, Config.EMBEDDING_MODEL, embed_ms)
+            embedding_model = EXCLUDED.embedding_model,
+            search_keywords = EXCLUDED.search_keywords,
+            keywords_source_hash = EXCLUDED.keywords_source_hash,
+            search_text = EXCLUDED.search_text,
+            keywords_attempts = CASE
+                WHEN product_embeddings.keywords_source_hash IS DISTINCT FROM EXCLUDED.keywords_source_hash
+                THEN 0 ELSE product_embeddings.keywords_attempts END;
+    """, (variant_id, user_id, *structured, vector, content_hash, template_id, Config.EMBEDDING_MODEL,
+          *keyword_columns))
+    log.info("Variant %s (template %s) embedded with %s in %.0f ms and saved securely (keywords: %s).",
+             variant_id, template_id, Config.EMBEDDING_MODEL, embed_ms, "yes" if keywords else "pending")
+
+
+def _reusable_keywords(cur, user_id, existing, keywords_hash):
+    """Keywords ya generadas para este mismo contenido: las del propio producto o las de otra variante
+    (u otra compañía) del tenant con el mismo nombre base, categoría y descripción. None = pendiente."""
+    if existing and existing[2] == keywords_hash and existing[1] is not None:
+        return list(existing[1])
+    cur.execute("""
+        SELECT search_keywords FROM product_embeddings
+        WHERE user_id = %s AND keywords_source_hash = %s AND search_keywords IS NOT NULL
+        LIMIT 1
+    """, (user_id, keywords_hash))
+    row = cur.fetchone()
+    return list(row[0]) if row and row[0] is not None else None
 
 
 def _reconcile(cur, user_id, data, event_ts):

@@ -5,8 +5,9 @@
 -- WARNING: this script DROPS every table. Use it only to create a NEW database.
 -- For an existing database, apply the migrations instead.
 
--- 1. Enable AI extension (pgvector)
+-- 1. Enable AI extension (pgvector) and trigram similarity (typo-tolerant lexical search)
 CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- 2. Drop existing tables in reverse order of dependencies (Clean DB reset)
 DROP TABLE IF EXISTS product_sync_versions CASCADE;
@@ -133,6 +134,11 @@ CREATE TABLE product_embeddings (
     embedding vector(384),
     content_hash VARCHAR(64), 
     embedding_model VARCHAR(100),
+    search_keywords TEXT[],              -- sinónimos/traducciones generados por el LLM (MS1)
+    keywords_source_hash VARCHAR(64),    -- nombre+categoría+descripción con que se generaron
+    keywords_attempts INTEGER NOT NULL DEFAULT 0,
+    keywords_updated_at TIMESTAMP WITH TIME ZONE,
+    search_text TEXT,                    -- nombre + categoría + keywords normalizados (búsqueda léxica)
     PRIMARY KEY (variant_id, user_id)
 );
 -- An older event (e.g. a delayed retry) is discarded instead of overwriting newer data.
@@ -173,3 +179,6 @@ CREATE TABLE chat_history (
 CREATE INDEX idx_product_embeddings_tenant ON product_embeddings (user_id, company_id, embedding_model);
 CREATE INDEX idx_chat_history_session ON chat_history (session_id, user_id, company_id, created_at);
 CREATE INDEX idx_search_history_tenant ON search_history (user_id, company_id, created_at);
+CREATE INDEX idx_product_embeddings_search_text_trgm ON product_embeddings USING gin (search_text gin_trgm_ops);
+CREATE INDEX idx_product_embeddings_keywords_pending ON product_embeddings (user_id, template_id)
+    WHERE search_keywords IS NULL;
