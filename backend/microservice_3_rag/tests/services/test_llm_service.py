@@ -1,70 +1,111 @@
-from unittest.mock import patch, MagicMock
-from services.llm_service import generate_rag_response
+from unittest.mock import MagicMock, patch
 
-def test_generate_rag_response_missing_api_key():
-    reply, tokens = generate_rag_response("S", "T", "M", [], [], "msg", "")
-    
-    assert "ERROR" in reply
-    assert tokens == 0
+import pytest
 
-@patch('services.llm_service.Groq')
-def test_generate_rag_response_success(mock_groq_class):
-    mock_client = MagicMock()
-    mock_completion = MagicMock()
-    mock_completion.choices[0].message.content = "Bot response here"
-    mock_completion.usage.total_tokens = 42
-    mock_client.chat.completions.create.return_value = mock_completion
-    mock_groq_class.return_value = mock_client
-    
-    products = [{"name": "Laptop", "sku": "LPT1", "price": 1000, "stock": 5}]
-    history = [("user", "Hola")]
-    
-    reply, tokens = generate_rag_response(
-        "Supreme", "Tenant", "llama", products, history, "msg", "key"
-    )
-    
-    assert reply == "Bot response here"
+from services.llm_service import (
+    DEFAULT_SUPREME_PROMPT, LLM_SECURITY_REMINDER, LLMUnavailableError, build_catalog_context,
+    build_messages, extract_references, generate_rag_response,
+)
+
+PRODUCTS = [
+    {"variant_id": 1, "name": "Hyundai Audifonos", "category": "Tecnologia", "price": 130000.0,
+     "currency": "COP", "stock": 10, "url": "https://shop/p/1", "description": "*• Sonido claro.*"},
+    {"variant_id": 2, "name": "Redmi Buds", "category": "Tecnologia", "price": 85000.0,
+     "currency": "COP", "stock": 0, "url": None, "description": ""},
+]
+
+
+def completion(content, tokens=42):
+    result = MagicMock()
+    result.choices[0].message.content = content
+    result.usage.total_tokens = tokens
+    return result
+
+
+def test_catalog_context_has_tags_stock_link_and_categories():
+    context = build_catalog_context(PRODUCTS, ["Tecnologia", "Cocina"])
+    assert "AVAILABLE CATALOG:" in context
+    assert "[P1] Hyundai Audifonos" in context
+    assert "130,000.00 COP" in context
+    assert "Link: https://shop/p/1" in context
+    assert "Details: Sonido claro" in context
+    assert "[P2] Redmi Buds" in context and "OUT OF STOCK" in context
+    assert "general suggestions" in context and "Tecnologia, Cocina" in context
+
+
+def test_catalog_context_without_products():
+    assert "No relevant products were found" in build_catalog_context([], [])
+
+
+def test_build_messages_order_and_fallback_prompt():
+    history = [("user", "hola"), ("assistant", "¡Hola!"), ("system", "ignorado"), ("user", "")]
+    messages = build_messages(None, "Vende con amabilidad", PRODUCTS, [], history, "busco audífonos")
+    assert messages[0]["content"] == DEFAULT_SUPREME_PROMPT
+    assert "Vende con amabilidad" in messages[1]["content"]
+    assert "AVAILABLE CATALOG" in messages[2]["content"]
+    assert [m["role"] for m in messages[3:5]] == ["user", "assistant"]
+    assert "busco audífonos" in messages[-2]["content"]
+    assert messages[-1]["content"] == LLM_SECURITY_REMINDER
+
+
+def test_missing_api_key_raises():
+    with patch("services.llm_service.settings") as mock_settings:
+        mock_settings.GROQ_API_KEY = ""
+        with pytest.raises(LLMUnavailableError):
+            generate_rag_response("S", "T", "m", [], [], "msg", "")
+
+
+@patch("services.llm_service.Groq")
+def test_success_with_reasoning_model(mock_groq):
+    client = mock_groq.return_value
+    client.chat.completions.create.return_value = completion("Te recomiendo Redmi Buds [P2].")
+    reply, tokens = generate_rag_response("S", "T", "openai/gpt-oss-20b", PRODUCTS, [], "msg", "key")
+    assert reply == "Te recomiendo Redmi Buds [P2]."
     assert tokens == 42
-    mock_client.chat.completions.create.assert_called_once()
+    kwargs = client.chat.completions.create.call_args.kwargs
+    assert kwargs["model"] == "openai/gpt-oss-20b"
+    assert kwargs["extra_body"]["include_reasoning"] is False
 
-@patch('services.llm_service.Groq')
-def test_generate_rag_response_exception(mock_groq_class):
-    mock_client = MagicMock()
-    mock_client.chat.completions.create.side_effect = Exception("Groq API Timeout")
-    mock_groq_class.return_value = mock_client
-    
-    reply, tokens = generate_rag_response("S", "T", "M", [], [], "msg", "key")
-    
-    assert "Error communicating with LLM" in reply
-    assert "Groq API Timeout" in reply
-    assert tokens == 0
 
-@patch('services.llm_service.Groq')
-def test_generate_rag_response_empty_catalog(mock_groq_class):
-    mock_client = MagicMock()
-    mock_completion = MagicMock()
-    mock_completion.choices[0].message.content = "Lo siento, no encontré productos similares."
-    mock_completion.usage.total_tokens = 30
-    mock_client.chat.completions.create.return_value = mock_completion
-    mock_groq_class.return_value = mock_client
-    
-    empty_products = []
-    history = [("user", "busco un unicornio de peluche")]
-    
-    reply, tokens = generate_rag_response(
-        supreme_prompt="Supreme", 
-        tenant_prompt="Tenant", 
-        llm_model="llama3", 
-        context_products=empty_products, 
-        chat_history=history, 
-        user_message="tienes unicornios?", 
-        groq_api_key="valid_key"
-    )
-    
-    assert reply == "Lo siento, no encontré productos similares."
-    assert tokens == 30
-    mock_client.chat.completions.create.assert_called_once()
-    
-    call_kwargs = mock_client.chat.completions.create.call_args.kwargs
-    system_message = call_kwargs["messages"][0]["content"]
-    assert "No products match the search." in system_message
+@patch("services.llm_service.Groq")
+def test_retired_company_model_falls_back_to_default(mock_groq):
+    # Regresión: llama3-8b-8192 fue retirado por Groq y el chat quedaba respondiendo errores.
+    client = mock_groq.return_value
+    client.chat.completions.create.side_effect = [Exception("model_not_found"), completion("Hola")]
+    reply, _ = generate_rag_response("S", "T", "llama3-8b-8192", [], [], "hola", "key")
+    assert reply == "Hola"
+    models = [call.kwargs["model"] for call in client.chat.completions.create.call_args_list]
+    assert models == ["llama3-8b-8192", "openai/gpt-oss-20b"]
+    assert "extra_body" not in client.chat.completions.create.call_args_list[0].kwargs
+
+
+@patch("services.llm_service.Groq")
+def test_regression_llm_error_is_raised_not_returned_as_reply(mock_groq):
+    # Defecto: el texto "Error communicating with LLM: ..." se mostraba al cliente y se guardaba.
+    mock_groq.return_value.chat.completions.create.side_effect = Exception("timeout")
+    with pytest.raises(LLMUnavailableError):
+        generate_rag_response("S", "T", "openai/gpt-oss-20b", [], [], "msg", "key")
+
+
+@patch("services.llm_service.Groq")
+def test_empty_reply_is_unavailable(mock_groq):
+    mock_groq.return_value.chat.completions.create.return_value = completion("   ")
+    with pytest.raises(LLMUnavailableError):
+        generate_rag_response("S", "T", "openai/gpt-oss-20b", [], [], "msg", "key")
+
+
+def test_extract_references_with_tags():
+    reply, cited = extract_references("Tengo Redmi Buds [P2] y Hyundai Audifonos [P1] [P9].", PRODUCTS)
+    assert reply == "Tengo Redmi Buds y Hyundai Audifonos."
+    assert [p["variant_id"] for p in cited] == [2, 1]
+
+
+def test_extract_references_by_name_when_no_tags():
+    reply, cited = extract_references("Te sirven los hyundai audífonos.", PRODUCTS)
+    assert reply == "Te sirven los hyundai audífonos."
+    assert [p["variant_id"] for p in cited] == [1]
+
+
+def test_extract_references_none():
+    _, cited = extract_references("No tenemos bicicletas.", PRODUCTS)
+    assert cited == []
