@@ -56,13 +56,11 @@ class AIModelUpdate(BaseModel):
 # ==========================================
 
 class CompanyResponse(BaseModel):
-    """Schema para la lista de compañías en el Navbar"""
     platform: str
     company_id: str
     name: str
 
 class CompanyConfigResponse(BaseModel):
-    """Schema para mostrar la configuración actual de una compañía"""
     id: int
     company_id: str
     selected_embedding_model: str
@@ -74,7 +72,6 @@ class CompanyConfigResponse(BaseModel):
     is_active: bool
 
 class CompanyConfigUpdate(BaseModel):
-    """Schema para actualizar la configuración de una compañía específica"""
     welcome_message: Optional[str] = None
     system_prompt: Optional[str] = None
     selected_llm_model: Optional[str] = None

@@ -9,7 +9,6 @@ from api.routes.user_routes import router as user_router
 
 @pytest.fixture
 def mock_db_session():
-    """Mocks the SQLAlchemy database session."""
     session = MagicMock()
     return session
 

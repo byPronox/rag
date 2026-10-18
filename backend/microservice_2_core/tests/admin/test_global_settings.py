@@ -52,23 +52,17 @@ def test_get_dashboard_metrics(test_client, mock_db_session, mock_admin_user):
     test_client.app.dependency_overrides[get_db] = lambda: mock_db_session
     test_client.app.dependency_overrides[get_current_admin] = lambda: mock_admin_user
     
-    # Simulate count() and scalar() returns
-    # 1. Total RAG queries (count)
-    # 2. Total searches (count)
     mock_db_session.query.return_value.filter.return_value.count.return_value = 50
     mock_db_session.query.return_value.count.return_value = 20
     
-    # 3. Total Tokens (scalar)
-    # 4. Avg Latency (scalar)
     mock_db_session.query.return_value.scalar.side_effect = [15000, 350]
     
-    # Simulate complex queries for Top Searches and User Activity
     mock_db_session.query.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.side_effect = [
-        [("price of product x", 15)], # top searches
+        [("price of product x", 15)], 
     ]
     
     mock_db_session.query.return_value.join.return_value.filter.return_value.group_by.return_value.order_by.return_value.limit.return_value.all.return_value = [
-        ("user@company.com", 30, 8000) # user activity
+        ("user@company.com", 30, 8000) 
     ]
     
     response = test_client.get("/admin/metrics")
@@ -78,6 +72,6 @@ def test_get_dashboard_metrics(test_client, mock_db_session, mock_admin_user):
     assert data["total_rag_queries"] == 50
     assert data["total_search_queries"] == 20
     assert data["total_tokens"] == 15000
-    assert data["avg_latency_sec"] == 0.35  # 350 / 1000
+    assert data["avg_latency_sec"] == 0.35 
     assert data["top_queries"][0]["query"] == "price of product x"
     assert data["user_activity"][0]["email"] == "user@company.com"
