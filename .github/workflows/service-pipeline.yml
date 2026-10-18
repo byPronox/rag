@@ -1,0 +1,129 @@
+# Reusable pipeline for a single microservice
+name: Service Pipeline (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: "Microservice folder inside backend/"
+        required: true
+        type: string
+      ml:
+        description: "Install CPU torch and cache Hugging Face models"
+        required: false
+        type: boolean
+        default: false
+      run-docker:
+        description: "Build the Docker image and scan it with Trivy"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: backend/${{ inputs.service }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python (cached)
+        uses: ./.github/actions/setup-python-env
+        with:
+          service: ${{ inputs.service }}
+          extra-packages: "flake8 pylint bandit"
+          install-requirements: "false"
+
+      - name: Flake8 critical syntax check
+        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+
+      - name: Flake8 full report
+        run: flake8 . --output-file=flake8-report.txt --exit-zero
+
+      - name: Pylint static analysis
+        run: find . -type f -name "*.py" | xargs pylint --disable=import-error --output-format=text > pylint-report.txt || true
+
+      - name: Bandit security analysis
+        run: bandit -r . -x ./tests -f txt -o bandit-report.txt || true
+
+      - name: Upload QA and security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-reports-${{ inputs.service }}
+          if-no-files-found: ignore
+          path: |
+            backend/${{ inputs.service }}/flake8-report.txt
+            backend/${{ inputs.service }}/pylint-report.txt
+            backend/${{ inputs.service }}/bandit-report.txt
+
+  tests:
+    name: Unit Tests & Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend/${{ inputs.service }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python (cached)
+        uses: ./.github/actions/setup-python-env
+        with:
+          service: ${{ inputs.service }}
+          ml: ${{ inputs.ml }}
+          extra-packages: "pytest httpx pytest-cov"
+          install-requirements: "true"
+
+      - name: Run tests with coverage
+        env:
+          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy_db"
+          GROQ_API_KEY: "dummy_key_for_tests"
+          SECRET_KEY: "dummy_jwt_secret_for_tests"
+        run: pytest --cov=. --cov-report=xml:coverage.xml --cov-fail-under=80
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ inputs.service }}
+          if-no-files-found: ignore
+          path: backend/${{ inputs.service }}/coverage.xml
+
+  docker:
+    name: Docker Build & Trivy Scan
+    needs: [quality, tests]
+    if: inputs.run-docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image with layer cache
+        uses: docker/build-push-action@v6
+        with:
+          context: backend/${{ inputs.service }}
+          load: true
+          push: false
+          tags: rag-${{ inputs.service }}:ci
+          cache-from: type=gha,scope=${{ inputs.service }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.service }}
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: rag-${{ inputs.service }}:ci
+          format: table
+          exit-code: "0"
+          severity: CRITICAL,HIGH
+          scanners: vuln
+          ignore-unfixed: true

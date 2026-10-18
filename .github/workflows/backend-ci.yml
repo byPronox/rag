@@ -1,171 +1,159 @@
+# Main CI pipeline: detects changed microservices and runs the reusable pipeline for each one
 name: Backend CI Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "staging", "feature/**", "fix/**" ]
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
+      - ".github/workflows/service-pipeline.yml"
+      - ".github/actions/**"
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "staging" ]
     paths:
       - "backend/**"
       - ".github/workflows/backend-ci.yml"
+      - ".github/workflows/service-pipeline.yml"
+      - ".github/actions/**"
   workflow_dispatch:
 
 concurrency:
   group: backend-ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+  pull-requests: write
+
 jobs:
-  code-quality:
-    name: Code Quality & Security (${{ matrix.service }})
+  # Detect which microservices changed
+  changes:
+    name: Detect changes
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        service:
-          - microservice_1_sync
-          - microservice_2_core
-          - microservice_3_rag
-    defaults:
-      run:
-        working-directory: backend/${{ matrix.service }}
+    outputs:
+      services: ${{ steps.set.outputs.services }}
+      any: ${{ steps.set.outputs.any }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
+      - name: Filter changed paths
+        id: filter
+        if: github.event_name != 'workflow_dispatch'
+        uses: dorny/paths-filter@v3
         with:
-          python-version: "3.12"
+          filters: |
+            shared:
+              - '.github/workflows/backend-ci.yml'
+              - '.github/workflows/service-pipeline.yml'
+              - '.github/actions/**'
+            microservice_1_sync:
+              - 'backend/microservice_1_sync/**'
+            microservice_2_core:
+              - 'backend/microservice_2_core/**'
+            microservice_3_rag:
+              - 'backend/microservice_3_rag/**'
 
-      - name: Install linters
+      - name: Build list of services to run
+        id: set
         run: |
-          python -m pip install --upgrade pip
-          pip install flake8 pylint bandit
+          ALL='["microservice_1_sync","microservice_2_core","microservice_3_rag"]'
+          CHANGES='${{ steps.filter.outputs.changes }}'
+          CHANGES=${CHANGES:-[]}
 
-      - name: Flake8 critical syntax check
-        run: flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-
-      - name: Flake8 full report
-        run: flake8 . --output-file=flake8-report.txt --exit-zero
-
-      - name: Pylint static analysis
-        run: find . -type f -name "*.py" | xargs pylint --disable=import-error --output-format=text > pylint-report.txt || true
-
-      - name: Bandit security analysis
-        run: bandit -r . -x ./tests -f txt -o bandit-report.txt || true
-
-      - name: Upload QA and security reports
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: qa-reports-${{ matrix.service }}
-          if-no-files-found: ignore
-          path: |
-            backend/${{ matrix.service }}/flake8-report.txt
-            backend/${{ matrix.service }}/pylint-report.txt
-            backend/${{ matrix.service }}/bandit-report.txt
-
-  testing:
-    name: Unit Tests & Coverage (${{ matrix.service }})
-    needs: code-quality
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - service: microservice_1_sync
-            ml: true
-          - service: microservice_2_core
-            ml: false
-          - service: microservice_3_rag
-            ml: true
-    defaults:
-      run:
-        working-directory: backend/${{ matrix.service }}
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-          cache-dependency-path: backend/${{ matrix.service }}/requirements.txt
-
-      - name: Cache Hugging Face models
-        if: matrix.ml
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/huggingface
-          key: hf-${{ matrix.service }}-v1
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install pytest httpx pytest-cov
-          if [ "${{ matrix.ml }}" = "true" ]; then
-            pip install -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            SERVICES="$ALL"
+            echo "Manual run -> running all services"
+          elif echo "$CHANGES" | jq -e 'index("shared")' > /dev/null; then
+            SERVICES="$ALL"
+            echo "Pipeline files changed -> running all services"
           else
-            pip install -r requirements.txt
+            SERVICES=$(echo "$CHANGES" | jq -c 'map(select(. != "shared"))')
           fi
 
-      - name: Run tests with coverage
-        env:
-          DATABASE_URL: "postgresql://dummy:dummy@localhost:5432/dummy_db"
-          GROQ_API_KEY: "dummy_key_for_tests"
-          SECRET_KEY: "dummy_jwt_secret_for_tests"
-        run: pytest --cov=. --cov-report=xml:coverage.xml --cov-fail-under=80
+          echo "Services to run: $SERVICES"
+          echo "services=$SERVICES" >> "$GITHUB_OUTPUT"
+          if [ "$SERVICES" = "[]" ]; then
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Upload coverage report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-${{ matrix.service }}
-          if-no-files-found: ignore
-          path: backend/${{ matrix.service }}/coverage.xml
-
-  docker-scan:
-    name: Docker Build & Trivy Scan (${{ matrix.service }})
-    needs: testing
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
+  # Run the reusable pipeline only for changed services
+  pipeline:
+    name: ${{ matrix.service }}
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
     strategy:
       fail-fast: false
       matrix:
-        service:
-          - microservice_1_sync
-          - microservice_2_core
-          - microservice_3_rag
+        service: ${{ fromJSON(needs.changes.outputs.services) }}
+    uses: ./.github/workflows/service-pipeline.yml
+    with:
+      service: ${{ matrix.service }}
+      ml: ${{ matrix.service != 'microservice_2_core' }}
+      # Docker build and Trivy scan only on push to staging or main
+      run-docker: ${{ github.ref_name == 'main' || github.ref_name == 'staging' }}
+
+  # Post actions: always / success / failure notifications
+  notify:
+    name: Notify
+    needs: [changes, pipeline]
+    if: always()
+    runs-on: ubuntu-latest
+    env:
+      RESULT: ${{ needs.pipeline.result }}
+      SERVICES: ${{ needs.changes.outputs.services }}
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: "Post: always - pipeline summary"
+        run: |
+          {
+            echo "## Backend CI Result"
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| Branch | \`${{ github.ref_name }}\` |"
+            echo "| Event | ${{ github.event_name }} |"
+            echo "| Commit | \`${{ github.sha }}\` |"
+            echo "| Services run | ${SERVICES:-none} |"
+            echo "| Result | **${RESULT}** |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: "Post: success"
+        if: needs.pipeline.result == 'success' || (needs.pipeline.result == 'skipped' && needs.changes.result == 'success')
+        run: |
+          echo "STATUS=✅ Pipeline succeeded" >> "$GITHUB_ENV"
+          echo "Pipeline OK on ${{ github.ref_name }}"
 
-      - name: Build image with layer cache
-        uses: docker/build-push-action@v6
+      - name: "Post: failure"
+        if: needs.pipeline.result == 'failure' || needs.pipeline.result == 'cancelled' || needs.changes.result == 'failure'
+        run: |
+          echo "STATUS=❌ Pipeline FAILED" >> "$GITHUB_ENV"
+          echo "::error::Pipeline failed on ${{ github.ref_name }}"
+
+      - name: Comment on Pull Request
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        uses: actions/github-script@v7
         with:
-          context: backend/${{ matrix.service }}
-          load: true
-          push: false
-          tags: rag-${{ matrix.service }}:ci
-          cache-from: type=gha,scope=${{ matrix.service }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: `${process.env.STATUS}\n\n**Services run:** ${process.env.SERVICES || 'none'}\n**Result:** ${process.env.RESULT}\n\n[View run](${process.env.RUN_URL})`
+            });
 
-      - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
-        with:
-          image-ref: rag-${{ matrix.service }}:ci
-          format: table
-          exit-code: "0"
-          severity: CRITICAL,HIGH
-          scanners: vuln
-          ignore-unfixed: true
+      - name: Notify Discord (optional)
+        if: env.DISCORD_WEBHOOK_URL != ''
+        continue-on-error: true
+        run: |
+          MSG="${STATUS} | ${{ github.repository }} | branch ${{ github.ref_name }} | services: ${SERVICES:-none} | ${RUN_URL}"
+          jq -n --arg c "$MSG" '{content: $c}' | \
+            curl -sS -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
+
+      - name: Fail workflow if pipeline failed
+        if: needs.pipeline.result == 'failure' || needs.changes.result == 'failure'
+        run: exit 1
