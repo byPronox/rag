@@ -1,0 +1,28 @@
+# Reusable composite action
+name: "Railway deploy"
+description: "Deploy a service to Railway using the Railway CLI"
+
+inputs:
+  service-id:
+    description: "Railway service ID"
+    required: true
+  environment:
+    description: "Railway environment name"
+    required: false
+    default: "production"
+  railway-token:
+    description: "Railway project token for the target environment"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Railway CLI
+      shell: bash
+      run: npm install -g @railway/cli
+
+    - name: Deploy service
+      shell: bash
+      env:
+        RAILWAY_TOKEN: ${{ inputs.railway-token }}
+      run: railway up --service "${{ inputs.service-id }}" --environment "${{ inputs.environment }}" --ci
