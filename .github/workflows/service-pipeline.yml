@@ -18,11 +18,6 @@ on:
         required: false
         type: boolean
         default: false
-      run-deploy:
-        description: "Deploy the service to Railway production"
-        required: false
-        type: boolean
-        default: false
 
 jobs:
   quality:
@@ -135,32 +130,3 @@ jobs:
           severity: CRITICAL,HIGH
           scanners: vuln
           ignore-unfixed: true
-
-  # Each microservice deploys as soon as its own jobs pass
-  deploy:
-    name: Deploy to Railway
-    needs: docker
-    if: inputs.run-deploy
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Resolve Railway service ID
-        id: target
-        run: |
-          case "${{ inputs.service }}" in
-            microservice_1_sync) ID="b7ea6ff7-443c-4e0a-9f5a-a6c14c5db18d" ;;
-            microservice_2_core) ID="bc3690bc-461e-4013-a373-a9413afc2dc8" ;;
-            microservice_3_rag)  ID="6b6cce09-5dc1-4efb-a70d-0be9911d6b92" ;;
-            *) echo "::error::Unknown service ${{ inputs.service }}"; exit 1 ;;
-          esac
-          echo "id=$ID" >> "$GITHUB_OUTPUT"
-
-      - name: Deploy to Railway
-        uses: ./.github/actions/railway-deploy
-        with:
-          service-id: ${{ steps.target.outputs.id }}
-          environment: production
-          railway-token: ${{ secrets.RAILWAY_TOKEN_PRODUCTION }}

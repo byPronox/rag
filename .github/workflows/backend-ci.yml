@@ -1,4 +1,4 @@
-# Main CI/CD pipeline: detects changed services, runs their pipelines and deploys to Railway from main
+# Main CI pipeline: detects changed services and runs their pipelines
 name: Backend CI Pipeline
 
 on:
@@ -20,8 +20,7 @@ on:
 
 concurrency:
   group: backend-ci-${{ github.ref }}
-  # Never cancel a run on main, it may be deploying
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -99,9 +98,6 @@ jobs:
       ml: ${{ matrix.service != 'microservice_2_core' }}
       # Docker build and Trivy scan only on push to staging or main
       run-docker: ${{ github.ref_name == 'main' || github.ref_name == 'staging' }}
-      # Deploy to Railway production only on push to main
-      run-deploy: ${{ github.ref_name == 'main' && github.event_name == 'push' }}
-    secrets: inherit
 
   # Gateway (nginx): lint, build, config test and scan
   gateway:
@@ -155,28 +151,10 @@ jobs:
           scanners: vuln
           ignore-unfixed: true
 
-  # Deploy the gateway to Railway production
-  gateway-deploy:
-    name: gateway / Deploy to Railway
-    needs: gateway
-    if: github.ref_name == 'main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Deploy to Railway
-        uses: ./.github/actions/railway-deploy
-        with:
-          service-id: ca76178d-3cbe-4654-9cee-9ecf9135f9a5
-          environment: production
-          railway-token: ${{ secrets.RAILWAY_TOKEN_PRODUCTION }}
-
   # Post actions: always / success / failure notifications
   notify:
     name: Notify
-    needs: [changes, pipeline, gateway, gateway-deploy]
+    needs: [changes, pipeline, gateway]
     if: always()
     runs-on: ubuntu-latest
     env:
@@ -190,7 +168,7 @@ jobs:
           if [ "$FAILED" = "true" ]; then RESULT=failure; else RESULT=success; fi
           echo "RESULT=$RESULT" >> "$GITHUB_ENV"
           {
-            echo "## Backend CI/CD Result"
+            echo "## Backend CI Result"
             echo "| Field | Value |"
             echo "|---|---|"
             echo "| Branch | \`${{ github.ref_name }}\` |"
@@ -200,7 +178,6 @@ jobs:
             echo "| Gateway run | ${GATEWAY:-false} |"
             echo "| Microservices pipeline | ${{ needs.pipeline.result }} |"
             echo "| Gateway build | ${{ needs.gateway.result }} |"
-            echo "| Gateway deploy | ${{ needs.gateway-deploy.result }} |"
             echo "| Result | **${RESULT}** |"
           } >> "$GITHUB_STEP_SUMMARY"
 
