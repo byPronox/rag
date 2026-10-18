@@ -16,7 +16,6 @@ def test_register_new_tenant(test_client, mock_db_session):
 def test_register_existing_email(test_client, mock_db_session):
     test_client.app.dependency_overrides[get_db] = lambda: mock_db_session
     
-    # Simulate user already exists in the database
     mock_db_session.query.return_value.filter.return_value.first.return_value = MagicMock()
     
     payload = {"email": "existing@tenant.com", "password": "secure_pass", "role": "user"}
