@@ -1,4 +1,4 @@
-# Main CI pipeline: detects changed microservices and runs the reusable pipeline for each one
+# Main CI/CD pipeline: detects changed services, runs their pipelines and deploys to Railway from main
 name: Backend CI Pipeline
 
 on:
@@ -20,20 +20,22 @@ on:
 
 concurrency:
   group: backend-ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel a run on main, it may be deploying
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
   pull-requests: write
 
 jobs:
-  # Detect which microservices changed
+  # Detect which services changed
   changes:
     name: Detect changes
     runs-on: ubuntu-latest
     outputs:
       services: ${{ steps.set.outputs.services }}
       any: ${{ steps.set.outputs.any }}
+      gateway: ${{ steps.set.outputs.gateway }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -54,6 +56,8 @@ jobs:
               - 'backend/microservice_2_core/**'
             microservice_3_rag:
               - 'backend/microservice_3_rag/**'
+            gateway:
+              - 'backend/gateway/**'
 
       - name: Build list of services to run
         id: set
@@ -62,25 +66,25 @@ jobs:
           CHANGES='${{ steps.filter.outputs.changes }}'
           CHANGES=${CHANGES:-[]}
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || echo "$CHANGES" | jq -e 'index("shared")' > /dev/null; then
+            echo "Manual run or pipeline files changed -> running everything"
             SERVICES="$ALL"
-            echo "Manual run -> running all services"
-          elif echo "$CHANGES" | jq -e 'index("shared")' > /dev/null; then
-            SERVICES="$ALL"
-            echo "Pipeline files changed -> running all services"
+            GATEWAY=true
           else
-            SERVICES=$(echo "$CHANGES" | jq -c 'map(select(. != "shared"))')
+            SERVICES=$(echo "$CHANGES" | jq -c 'map(select(. != "shared" and . != "gateway"))')
+            if echo "$CHANGES" | jq -e 'index("gateway")' > /dev/null; then GATEWAY=true; else GATEWAY=false; fi
           fi
 
-          echo "Services to run: $SERVICES"
+          echo "Services to run: $SERVICES | Gateway: $GATEWAY"
           echo "services=$SERVICES" >> "$GITHUB_OUTPUT"
+          echo "gateway=$GATEWAY" >> "$GITHUB_OUTPUT"
           if [ "$SERVICES" = "[]" ]; then
             echo "any=false" >> "$GITHUB_OUTPUT"
           else
             echo "any=true" >> "$GITHUB_OUTPUT"
           fi
 
-  # Run the reusable pipeline only for changed services
+  # Run the reusable pipeline only for changed microservices
   pipeline:
     name: ${{ matrix.service }}
     needs: changes
@@ -95,40 +99,119 @@ jobs:
       ml: ${{ matrix.service != 'microservice_2_core' }}
       # Docker build and Trivy scan only on push to staging or main
       run-docker: ${{ github.ref_name == 'main' || github.ref_name == 'staging' }}
+      # Deploy to Railway production only on push to main
+      run-deploy: ${{ github.ref_name == 'main' && github.event_name == 'push' }}
+    secrets: inherit
+
+  # Gateway (nginx): lint, build, config test and scan
+  gateway:
+    name: gateway / Build & Config Test
+    needs: changes
+    if: needs.changes.outputs.gateway == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Lint Dockerfile (hadolint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: backend/gateway/Dockerfile
+          no-fail: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image with layer cache
+        uses: docker/build-push-action@v6
+        with:
+          context: backend/gateway
+          load: true
+          push: false
+          tags: rag-gateway:ci
+          # Pull the base image from Google's mirror to avoid registry rate limits
+          build-args: |
+            BASE_IMAGE=mirror.gcr.io/library/nginx:alpine
+          cache-from: type=gha,scope=gateway
+          cache-to: type=gha,mode=max,scope=gateway
+
+      - name: Validate nginx config
+        run: |
+          docker run --rm \
+            -e CORE_HOST=core.internal -e CORE_PORT=8000 \
+            -e RAG_HOST=rag.internal -e RAG_PORT=8000 \
+            rag-gateway:ci /bin/sh -c \
+            "envsubst '\${CORE_HOST} \${CORE_PORT} \${RAG_HOST} \${RAG_PORT}' < /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf && nginx -t"
+
+      - name: Run Trivy vulnerability scanner
+        if: github.ref_name == 'main' || github.ref_name == 'staging'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: rag-gateway:ci
+          format: table
+          exit-code: "0"
+          severity: CRITICAL,HIGH
+          scanners: vuln
+          ignore-unfixed: true
+
+  # Deploy the gateway to Railway production
+  gateway-deploy:
+    name: gateway / Deploy to Railway
+    needs: gateway
+    if: github.ref_name == 'main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to Railway
+        uses: ./.github/actions/railway-deploy
+        with:
+          service-id: ca76178d-3cbe-4654-9cee-9ecf9135f9a5
+          environment: production
+          railway-token: ${{ secrets.RAILWAY_TOKEN_PRODUCTION }}
 
   # Post actions: always / success / failure notifications
   notify:
     name: Notify
-    needs: [changes, pipeline]
+    needs: [changes, pipeline, gateway, gateway-deploy]
     if: always()
     runs-on: ubuntu-latest
     env:
-      RESULT: ${{ needs.pipeline.result }}
+      FAILED: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
       SERVICES: ${{ needs.changes.outputs.services }}
-      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+      GATEWAY: ${{ needs.changes.outputs.gateway }}
       RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
     steps:
       - name: "Post: always - pipeline summary"
         run: |
+          if [ "$FAILED" = "true" ]; then RESULT=failure; else RESULT=success; fi
+          echo "RESULT=$RESULT" >> "$GITHUB_ENV"
           {
-            echo "## Backend CI Result"
+            echo "## Backend CI/CD Result"
             echo "| Field | Value |"
             echo "|---|---|"
             echo "| Branch | \`${{ github.ref_name }}\` |"
             echo "| Event | ${{ github.event_name }} |"
             echo "| Commit | \`${{ github.sha }}\` |"
             echo "| Services run | ${SERVICES:-none} |"
+            echo "| Gateway run | ${GATEWAY:-false} |"
+            echo "| Microservices pipeline | ${{ needs.pipeline.result }} |"
+            echo "| Gateway build | ${{ needs.gateway.result }} |"
+            echo "| Gateway deploy | ${{ needs.gateway-deploy.result }} |"
             echo "| Result | **${RESULT}** |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: "Post: success"
-        if: needs.pipeline.result == 'success' || (needs.pipeline.result == 'skipped' && needs.changes.result == 'success')
+        if: env.FAILED != 'true'
         run: |
           echo "STATUS=✅ Pipeline succeeded" >> "$GITHUB_ENV"
           echo "Pipeline OK on ${{ github.ref_name }}"
 
       - name: "Post: failure"
-        if: needs.pipeline.result == 'failure' || needs.pipeline.result == 'cancelled' || needs.changes.result == 'failure'
+        if: env.FAILED == 'true'
         run: |
           echo "STATUS=❌ Pipeline FAILED" >> "$GITHUB_ENV"
           echo "::error::Pipeline failed on ${{ github.ref_name }}"
@@ -143,17 +226,9 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
-              body: `${process.env.STATUS}\n\n**Services run:** ${process.env.SERVICES || 'none'}\n**Result:** ${process.env.RESULT}\n\n[View run](${process.env.RUN_URL})`
+              body: `${process.env.STATUS}\n\n**Services run:** ${process.env.SERVICES || 'none'}\n**Gateway run:** ${process.env.GATEWAY || 'false'}\n**Result:** ${process.env.RESULT}\n\n[View run](${process.env.RUN_URL})`
             });
 
-      - name: Notify Discord (optional)
-        if: env.DISCORD_WEBHOOK_URL != ''
-        continue-on-error: true
-        run: |
-          MSG="${STATUS} | ${{ github.repository }} | branch ${{ github.ref_name }} | services: ${SERVICES:-none} | ${RUN_URL}"
-          jq -n --arg c "$MSG" '{content: $c}' | \
-            curl -sS -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
-
       - name: Fail workflow if pipeline failed
-        if: needs.pipeline.result == 'failure' || needs.changes.result == 'failure'
+        if: env.FAILED == 'true'
         run: exit 1
