@@ -1,0 +1,8 @@
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch
+sentence-transformers==2.5.1
+numpy<2.0.0
+psycopg2-binary
+python-dotenv
+sqlalchemy==2.0.27
+pgvector==0.2.5
