@@ -6,7 +6,6 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 
-# Debe coincidir con MS1 y con config/settings.py (hay un test que lo verifica).
 ARG EMBEDDING_MODEL=paraphrase-multilingual-MiniLM-L12-v2
 ENV EMBEDDING_MODEL=${EMBEDDING_MODEL}
 
@@ -18,9 +17,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt --extra-index-url https://download.pytorch.org/whl/cpu
 
 RUN python -c "import os; from sentence_transformers import SentenceTransformer; SentenceTransformer(os.environ['EMBEDDING_MODEL'])"
+ENV HF_HUB_OFFLINE=1
+
+ENV WEB_CONCURRENCY=2 \
+    TORCH_NUM_THREADS=1
 
 COPY . .
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "::", "--port", "8000"]
+CMD ["sh", "-c", "uvicorn main:app --host :: --port 8000 --workers ${WEB_CONCURRENCY}"]

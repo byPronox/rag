@@ -3,14 +3,14 @@ import time
 from dataclasses import replace
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from api.deps import get_active_company, validate_tenant_api_key
 from config.settings import settings
-from database.connection import get_db
+from database.connection import SessionLocal, get_db
 from services.embedding_service import embedding_service
 from services.pgvector_service import public_product, search_params, search_products
 
@@ -65,8 +65,19 @@ def save_search_history(db, user_id, request, results, latency_ms):
         log.warning("Could not save search history: %s", type(exc).__name__)
 
 
+def save_search_history_background(user_id, request, results, latency_ms):
+    """Se ejecuta después de enviar la respuesta, con su propia sesión: la del endpoint
+    ya puede estar cerrada para entonces."""
+    db = SessionLocal()
+    try:
+        save_search_history(db, user_id, request, results, latency_ms)
+    finally:
+        db.close()
+
+
 @router.post("/")
-def semantic_search(request: SearchRequest, db: Session = Depends(get_db),
+def semantic_search(request: SearchRequest, background_tasks: BackgroundTasks,
+                    db: Session = Depends(get_db),
                     auth: dict = Depends(validate_tenant_api_key)):
     start = time.perf_counter()
     query = request.query.strip()
@@ -87,7 +98,7 @@ def semantic_search(request: SearchRequest, db: Session = Depends(get_db),
         })
 
     latency_ms = int((time.perf_counter() - start) * 1000)
-    save_search_history(db, auth["user_id"], request, results, latency_ms)
+    background_tasks.add_task(save_search_history_background, auth["user_id"], request, results, latency_ms)
     log.info("search company=%s results=%d latency_ms=%d", request.company_id, len(results), latency_ms)
 
     return {"query": query, "count": len(results), "results": [public_product(p) for p in results]}

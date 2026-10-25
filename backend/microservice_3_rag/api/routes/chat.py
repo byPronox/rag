@@ -46,6 +46,22 @@ def load_history(db, user_id, company_id, session_id):
     return [(row[0], row[1]) for row in reversed(rows)]
 
 
+def save_chat_history(db, session_id, user_id, company_id, message, reply, tokens_used, latency_ms):
+    """El historial es la memoria de la conversación, por eso se guarda antes de responder.
+    Si falla, se registra y la respuesta igual llega al comprador (nunca un error 500)."""
+    try:
+        db.execute(text("""
+            INSERT INTO chat_history (session_id, user_id, company_id, role, message, tokens_used, latency_ms)
+            VALUES (:sid, :uid, :cid, 'user', :umsg, 0, 0),
+                   (:sid, :uid, :cid, 'assistant', :bmsg, :tokens, :lat)
+        """), {"sid": session_id, "uid": user_id, "cid": company_id,
+               "umsg": message, "bmsg": reply, "tokens": tokens_used, "lat": latency_ms})
+        db.commit()
+    except Exception as exc:  # pylint: disable=broad-except
+        db.rollback()
+        log.warning("Could not save chat history: %s", type(exc).__name__)
+
+
 def retrieve_for_chat(db, user_id, company_id, message, history):
     """Busca con el mensaje actual y, si es un seguimiento ("¿y en negro?"), también con el mensaje
     anterior del cliente; se queda con el mejor puntaje de cada producto."""
@@ -105,18 +121,11 @@ def chat_interaction(request: ChatRequest, db: Session = Depends(get_db),
     reply, referenced = composed["plain"], composed["products"]
     latency_ms = int((time.perf_counter() - start) * 1000)
 
-    db.execute(text("""
-        INSERT INTO chat_history (session_id, user_id, company_id, role, message, tokens_used, latency_ms)
-        VALUES (:sid, :uid, :cid, 'user', :umsg, 0, 0),
-               (:sid, :uid, :cid, 'assistant', :bmsg, :tokens, :lat)
-    """), {"sid": request.session_id, "uid": user_id, "cid": request.company_id,
-           "umsg": message, "bmsg": reply, "tokens": tokens_used, "lat": latency_ms})
-    db.commit()
+    save_chat_history(db, request.session_id, user_id, request.company_id,
+                      message, reply, tokens_used, latency_ms)
     log.info("chat company=%s products=%d referenced=%d latency_ms=%d",
              request.company_id, len(products), len(referenced), latency_ms)
 
-    # `reply` (texto completo) mantiene compatibles a los widgets que no pintan tarjetas;
-    # reply_before / products_referenced / reply_after permiten mostrar la lista dentro del mensaje.
     return {
         **base_response,
         "reply": reply,
