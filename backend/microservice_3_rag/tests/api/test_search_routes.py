@@ -19,7 +19,8 @@ def setup(test_client, mock_db_session):
     search_module._history_has_metrics = None
     with patch("api.routes.search.get_active_company") as company, \
          patch("api.routes.search.embedding_service.generate_vector", return_value=[0.5, 0.5]), \
-         patch("api.routes.search.search_products") as search:
+         patch("api.routes.search.search_products") as search, \
+         patch("api.routes.search.SessionLocal", return_value=mock_db_session):
         company.return_value = {}
         search.return_value = [RESULT]
         yield {"company": company, "search": search}
@@ -40,6 +41,7 @@ def test_search_success_keeps_widget_contract(test_client, mock_db_session):
     assert item["name"] == "Teclado Mecánico" and item["price"] == 100.0 and "image_url" in item
     assert "description" not in item
     mock_db_session.commit.assert_called_once()
+    mock_db_session.close.assert_called_once()
 
 
 def test_search_passes_filters_and_caps_limit(test_client, setup):
