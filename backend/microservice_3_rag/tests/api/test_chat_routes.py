@@ -128,3 +128,11 @@ def test_new_question_searches_once(mock_search, _embed):
     retrieve_for_chat(MagicMock(), 99, "7", "necesito una lampara de pie para la sala con control remoto",
                       [("user", "audífonos")])
     assert mock_search.call_count == 1
+
+def test_regression_history_failure_does_not_break_chat(test_client, mock_db_session, setup):
+    mock_db_session.execute.side_effect = Exception("db down")
+    response = post(test_client)
+    assert response.status_code == 200
+    assert response.json()["reply"] == "Te recomiendo Redmi Buds."
+    mock_db_session.rollback.assert_called_once()
+    mock_db_session.commit.assert_not_called()
